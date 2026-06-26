@@ -1,0 +1,38 @@
+{
+  "name": "basketballmanager",
+  "version": "0.1.0",
+  "description": "International basketball manager — deterministic possession-based match engine, roster-quota validation, and a mobile-first manager UI.",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lib:build": "tsc -p tsconfig.lib.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "demo": "tsx scripts/demo.ts"
+  },
+  "keywords": [
+    "basketball",
+    "simulation",
+    "football-manager",
+    "fiba",
+    "euroleague",
+    "game-engine"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "next": "14.2.15",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}
