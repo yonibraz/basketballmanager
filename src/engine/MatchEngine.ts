@@ -428,7 +428,8 @@ export class MatchEngine {
     const ftProb = clamp(0.5 + (ftSkill - 10) * 0.025); // ~50%..75% across the scale
     for (let i = 0; i < count; i++) {
       shooter.box.freeThrowsAttempted++;
-      if (this.rng.chance(ftProb)) {
+      const made = this.rng.chance(ftProb);
+      if (made) {
         shooter.box.freeThrowsMade++;
         this.score(offense, shooter, 1);
       }
@@ -438,6 +439,10 @@ export class MatchEngine {
         clock: this.clock,
         teamId: offense.team.id,
         playerId: shooter.player.id,
+        // points is 1 on a make / 0 on a miss so a viewer can reconstruct the
+        // running score purely from the event stream.
+        points: made ? 1 : 0,
+        detail: made ? "make" : "miss",
       });
     }
   }

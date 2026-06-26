@@ -1,19 +1,42 @@
-# International Basketball Manager — Engine Core
+# Courtside — International Basketball Manager
 
-A *Football Manager*-style engine for **international / European basketball**.
-Unlike an NBA simulator, this models multi-competition calendars, foreign-player
-registration quotas, FIBA timing (40-minute games, 24-second shot clock), and
-Financial Fair Play instead of a salary cap.
+A *Football Manager*-style game for **international / European basketball**.
+Unlike an NBA simulator, this models foreign-player registration quotas, FIBA
+timing (40-minute games, 24-second shot clock), and a EuroLeague-style season —
+all driven by a deterministic possession engine.
 
-This repository currently contains the **verifiable engine core** — the pure,
-deterministic, fully-tested foundation the rest of the game (UI, persistence,
-season loop) builds on. It has **no UI or database dependency** and runs
-anywhere TypeScript runs (Next.js route, Expo app, worker, or CLI).
+It ships as a **playable, mobile-first web app** (Next.js) on top of a pure,
+fully-tested **engine core**:
+
+- **Play it:** pick a EuroLeague club, set your tactics (tempo, pressing, focus,
+  rotation), and manage a 7-matchday season — watching each of your games unfold
+  as a live, animated play-by-play with a real box score. Progress is saved in
+  the browser.
+- **Engine core:** a deterministic, framework-agnostic simulation + roster-quota
+  library with no UI or database dependency. Runs anywhere TypeScript runs.
+
+## Run the app
+
+```bash
+npm install
+npm run dev       # http://localhost:3000 — the playable manager game
+npm run build && npm run start   # production build
+```
+
+## Screens
+
+| Screen | What it does |
+| --- | --- |
+| **Table** | League standings + the current matchday's fixtures. |
+| **Squad** | Your roster with overalls, nationality/homegrown flags, and a live league quota-compliance check. |
+| **Tactics** | Tempo, pressing intensity, star rotation, and offensive focus — fed straight into the engine. |
+| **Play** | Animated match-day viewer: scoreboard, play-by-play feed (with speed/skip), and final box score. |
 
 ## What's here
 
 | Area | File | Notes |
 | --- | --- | --- |
+| App UI | `app/`, `components/`, `lib/` | Next.js mobile-first manager game; season loop, tactics, animated match viewer. Browser-saved progress. |
 | Match engine | `src/engine/MatchEngine.ts` | Possession-by-possession Markov simulation on a 24s shot clock. Outputs a box score + compressed event stream. Fully deterministic. |
 | Probability model | `src/engine/probability.ts` | Logistic offense-vs-defense matchup model, fatigue and clutch modifiers. |
 | Roster quotas | `src/rosters/quotas.ts` | Declarative "foreigner rules" per league (ACB homegrown minimum, Israeli foreign cap, EuroLeague, generic). |
