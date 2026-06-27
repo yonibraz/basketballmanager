@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useGame } from "@/lib/useGame";
-import { TEAM_CONFIGS, TOTAL_MATCHDAYS, sortedStandings, teamById } from "@/lib/league";
+import { type Fixture, TEAM_CONFIGS, TOTAL_MATCHDAYS, sortedStandings, teamById } from "@/lib/league";
 import { Standings } from "@/components/Standings";
 import { Roster } from "@/components/Roster";
 import { TacticsBoard } from "@/components/TacticsBoard";
@@ -73,7 +73,12 @@ export default function Page() {
   const userTeamId = game.userTeamId;
   const team = teamById(game.league, userTeamId);
   const config = game.league.configs[userTeamId]!;
-  const mdLabel = game.seasonOver ? "Season complete" : `Matchday ${game.currentMatchday} / ${TOTAL_MATCHDAYS}`;
+  const mdLabel =
+    game.playoff.phase === "done"
+      ? "Season complete"
+      : game.playoff.phase === "semis" || game.playoff.phase === "final"
+      ? "Playoffs"
+      : `Matchday ${game.currentMatchday} / ${TOTAL_MATCHDAYS}`;
   const active = NAV.find((n) => n.k === tab)!;
 
   return (
@@ -123,7 +128,12 @@ export default function Page() {
         )}
         {tab === "roster" && <Roster team={team} config={config} />}
         {tab === "schedule" && (
-          <Standings league={game.league} userTeamId={userTeamId} currentMatchday={game.currentMatchday} />
+          <Standings
+            league={game.league}
+            userTeamId={userTeamId}
+            currentMatchday={game.currentMatchday}
+            playoff={game.playoff}
+          />
         )}
         {tab === "tactics" && <TacticsBoard tactics={game.tactics} onChange={game.setTactics} />}
         {tab === "stats" && <Stats league={game.league} userTeamId={userTeamId} />}
@@ -144,20 +154,38 @@ function MatchScreen({
   userTeamId: string;
   onGoTable: () => void;
 }) {
-  if (game.seasonOver) {
-    const table = sortedStandings(game.league);
-    const myPos = table.findIndex((s) => s.teamId === userTeamId) + 1;
-    const champ = game.league.configs[table[0]!.teamId]!;
+  // Season is fully over (playoffs done) — show champion screen.
+  if (game.playoff.phase === "done") {
+    const { bracket } = game.playoff;
+    const champId = bracket?.final.winnerId ?? null;
+    const champ = champId ? game.league.configs[champId] : null;
+
+    // Determine if the user's team was in the playoff bracket at all.
+    const inPlayoffs = bracket
+      ? bracket.semis.some((s) => s.homeId === userTeamId || s.awayId === userTeamId)
+      : false;
+
+    let resultMsg: string;
+    if (champId === userTeamId) {
+      resultMsg = "Your team won the championship!";
+    } else if (inPlayoffs) {
+      resultMsg = "Your team was eliminated in the playoffs.";
+    } else {
+      // Determine finish position from standings.
+      const standings = sortedStandings(game.league);
+      const pos = standings.findIndex((s) => s.teamId === userTeamId) + 1;
+      resultMsg = pos > 0 ? `You finished #${pos} in the regular season.` : "Better luck next season.";
+    }
+
     return (
       <div className="screen">
         <div className="hero" style={{ paddingTop: 40, marginBottom: 16 }}>
           <div className="mark"><Icon name="trophy" size={44} /></div>
-          <h1>{champ.name}</h1>
+          <h1>{champ?.name ?? "—"}</h1>
           <p>Champions</p>
         </div>
         <div className="card center">
-          <p style={{ fontWeight: 700, fontSize: 18 }}>You finished {myPos ? `#${myPos}` : "—"}</p>
-          <p className="muted" style={{ marginTop: 4 }}>of {TEAM_CONFIGS.length} clubs</p>
+          <p style={{ fontWeight: 700, fontSize: 18 }}>{resultMsg}</p>
         </div>
         <button className="btn btn-primary" onClick={() => { game.newSeason(); onGoTable(); }}>
           Start a new season
@@ -166,6 +194,53 @@ function MatchScreen({
     );
   }
 
+  // In playoffs (semis or final) — show playoff fixture.
+  if (game.currentMatchday > TOTAL_MATCHDAYS && game.playoff.phase !== "none") {
+    const pg = game.playoffFixture;
+    if (!pg || !pg.homeId || !pg.awayId) {
+      return (
+        <div className="screen">
+          <div className="card center muted">Setting up next playoff game…</div>
+        </div>
+      );
+    }
+
+    // Determine banner label.
+    let bannerLabel = "PLAYOFFS";
+    if (game.playoff.phase === "semis") {
+      bannerLabel = game.playoff.currentGame === 0 ? "PLAYOFFS — Semifinal 1" : "PLAYOFFS — Semifinal 2";
+    } else if (game.playoff.phase === "final") {
+      bannerLabel = "PLAYOFFS — Final";
+    }
+
+    // Adapt PlayoffGame to Fixture shape for LiveMatch.
+    const adaptedFixture: Fixture = {
+      matchday: 99,
+      homeId: pg.homeId,
+      awayId: pg.awayId,
+      played: false,
+    };
+
+    const playoffKey = `playoff-${game.playoff.phase}-${game.playoff.currentGame}`;
+
+    return (
+      <div className="screen">
+        <div className="card center" style={{ marginBottom: 0, padding: "8px 16px", background: "var(--accent)", color: "#fff", borderRadius: 8 }}>
+          <span style={{ fontWeight: 800, letterSpacing: 1 }}>🏆 {bannerLabel}</span>
+        </div>
+        <LiveMatch
+          key={playoffKey}
+          league={game.league}
+          fixture={adaptedFixture}
+          userTeamId={userTeamId}
+          tactics={game.tactics}
+          onComplete={(h, a) => game.completePlayoffGame(h, a)}
+        />
+      </div>
+    );
+  }
+
+  // Regular season fixture.
   const fixture = game.userFixture;
   if (!fixture) {
     return (
