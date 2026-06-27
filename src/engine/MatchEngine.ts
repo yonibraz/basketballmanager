@@ -619,15 +619,25 @@ export class MatchEngine {
       teamId: team.team.id,
       playerId: fouler.player.id,
     });
-    if (fouler.box.fouls < MAX_PERSONAL_FOULS || fouler.fouledOut) return;
+    // Foulers are only ever drawn from the on-court lineup, so a player who is
+    // already disqualified can never reach this point.
+    if (fouler.box.fouls < MAX_PERSONAL_FOULS) return;
 
+    // The disqualified player must leave the floor regardless of whether a
+    // substitute exists. If the bench is exhausted the team plays a man short;
+    // either way the player is removed from the lineup so they can no longer be
+    // selected to shoot, defend, rebound, or foul again.
     fouler.fouledOut = true;
+    fouler.onCourt = false;
     const replacement = this.freshestBench(team);
     const slot = team.lineup.indexOf(fouler);
-    if (replacement && slot !== -1) {
-      fouler.onCourt = false;
-      replacement.onCourt = true;
-      team.lineup[slot] = replacement;
+    if (slot !== -1) {
+      if (replacement) {
+        replacement.onCourt = true;
+        team.lineup[slot] = replacement;
+      } else {
+        team.lineup.splice(slot, 1);
+      }
     }
     this.emit({
       type: "foul-out",
