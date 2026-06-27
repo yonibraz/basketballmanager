@@ -6,7 +6,7 @@ import { TEAM_CONFIGS, TOTAL_MATCHDAYS, sortedStandings, teamById } from "@/lib/
 import { Standings } from "@/components/Standings";
 import { Roster } from "@/components/Roster";
 import { TacticsBoard } from "@/components/TacticsBoard";
-import { MatchViewer } from "@/components/MatchViewer";
+import { LiveMatch } from "@/components/LiveMatch";
 
 type Tab = "home" | "roster" | "tactics" | "match";
 
@@ -136,7 +136,7 @@ function MatchScreen({
   }
 
   return (
-    <MatchViewer
+    <LiveMatch
       key={`md-${game.currentMatchday}`}
       league={game.league}
       fixture={fixture}

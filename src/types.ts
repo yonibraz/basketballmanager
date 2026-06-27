@@ -155,6 +155,7 @@ export type MatchEventType =
   | "foul"
   | "foul-out"
   | "substitution"
+  | "timeout"
   | "period-end"
   | "final";
 
@@ -191,4 +192,12 @@ export interface MatchInput {
   seed: number;
   /** Whether to record the full event stream (defaults to true). */
   recordEvents?: boolean;
+  /**
+   * Enable interactive ("live") mode. When set, the engine is driven one
+   * possession at a time via {@link MatchEngine.startLive}/`step`, and manager
+   * hooks (timeouts, in-game tactics, manual subs, defensive matchups) take
+   * effect. Live-only mechanics never run in batch mode, so {@link
+   * MatchEngine.simulate} stays byte-identical for a given seed.
+   */
+  live?: boolean;
 }

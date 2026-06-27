@@ -12,6 +12,12 @@ export {
   MatchEngine,
   lineupFromPlayers,
 } from "./engine/MatchEngine.js";
+export type {
+  LiveSide,
+  LiveState,
+  Stoppage,
+  SquadPlayer,
+} from "./engine/MatchEngine.js";
 export * from "./engine/probability.js";
 export * from "./rosters/quotas.js";
 export * from "./rosters/validation.js";
