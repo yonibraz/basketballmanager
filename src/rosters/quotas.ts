@@ -61,10 +61,11 @@ export const LEAGUE_QUOTAS: Record<string, LeagueQuotaRule> = {
     minRoster: 8,
   },
   // EuroLeague — continental, broadly open registration (no nationality cap).
+  // Clubs register a larger squad (up to 15) but may dress only 12 on game day.
   EUR_EUROLEAGUE: {
     id: "EUR_EUROLEAGUE",
     name: "EuroLeague",
-    rosterSize: 13,
+    rosterSize: 12,
     minRoster: 8,
   },
   // A generic FIBA-style domestic league with a moderate foreigner cap.

@@ -153,6 +153,7 @@ export type MatchEventType =
   | "steal"
   | "block"
   | "foul"
+  | "foul-out"
   | "substitution"
   | "period-end"
   | "final";

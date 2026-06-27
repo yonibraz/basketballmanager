@@ -2,8 +2,9 @@
 
 A *Football Manager*-style game for **international / European basketball**.
 Unlike an NBA simulator, this models foreign-player registration quotas, FIBA
-timing (40-minute games, 24-second shot clock), and a EuroLeague-style season —
-all driven by a deterministic possession engine.
+timing and rules (40-minute games, 24-second shot clock with a 14-second reset
+after offensive rebounds, disqualification on a 5th personal foul), and a
+EuroLeague-style season — all driven by a deterministic possession engine.
 
 It ships as a **playable, mobile-first web app** (Next.js) on top of a pure,
 fully-tested **engine core**:
@@ -50,7 +51,7 @@ npm run build && npm run start   # production build
 
 ```bash
 npm install
-npm test          # 29 unit tests (engine determinism, box-score integrity, quotas)
+npm test          # 31 unit tests (engine determinism, box-score integrity, FIBA foul rules, quotas)
 npm run typecheck # strict TypeScript, no emit
 npm run demo      # simulate one match + roster checks, printed to stdout
 ```

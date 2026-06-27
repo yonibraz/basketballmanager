@@ -95,6 +95,36 @@ describe("MatchEngine responds to team strength", () => {
   });
 });
 
+describe("MatchEngine FIBA foul rules", () => {
+  const results: MatchResult[] = Array.from({ length: 30 }, (_, i) => {
+    const { home, away } = teams();
+    return MatchEngine.simulate({ home, away, seed: 4000 + i });
+  });
+
+  it("never lets a player exceed 5 personal fouls (FIBA disqualification)", () => {
+    for (const r of results) {
+      for (const box of [r.home, r.away]) {
+        for (const p of box.players) {
+          expect(p.fouls).toBeLessThanOrEqual(5);
+        }
+      }
+    }
+  });
+
+  it("emits a foul-out event whenever a player reaches 5 fouls", () => {
+    for (const r of results) {
+      const fouledOut = new Set(
+        r.events.filter((e) => e.type === "foul-out").map((e) => e.playerId),
+      );
+      for (const box of [r.home, r.away]) {
+        for (const p of box.players) {
+          if (p.fouls === 5) expect(fouledOut.has(p.playerId)).toBe(true);
+        }
+      }
+    }
+  });
+});
+
 describe("MatchEngine event-stream toggle", () => {
   it("omits events when recordEvents is false", () => {
     const { home, away } = teams();
