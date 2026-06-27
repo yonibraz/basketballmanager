@@ -94,7 +94,7 @@ export default function Page() {
           ))}
         </nav>
         <div className="side-foot">
-          <button className="side-item" onClick={() => game.newSeason()}>
+          <button className="side-item" onClick={() => { game.newSeason(); setTab("dashboard"); }}>
             <Icon name="settings" size={19} />
             <span className="lbl">New season</span>
           </button>
