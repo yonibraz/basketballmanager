@@ -25,7 +25,7 @@ export function LiveMatch({
   fixture: Fixture;
   userTeamId: string;
   tactics: Tactics;
-  onComplete: (homeScore: number, awayScore: number) => void;
+  onComplete: (homeScore: number, awayScore: number, userSecondsPlayed: Record<string, number>) => void;
 }) {
   const userSide: LiveSide = fixture.homeId === userTeamId ? "home" : "away";
   const oppSide: LiveSide = userSide === "home" ? "away" : "home";
@@ -311,7 +311,13 @@ export function LiveMatch({
             </p>
             <BoxTable box={result.home} userId={userTeamId} />
             <BoxTable box={result.away} userId={userTeamId} />
-            <button className="btn btn-primary" style={{ marginTop: 8 }} onClick={() => onComplete(result.home.points, result.away.points)}>
+            <button className="btn btn-primary" style={{ marginTop: 8 }} onClick={() => {
+              const userBox = userSide === "home" ? result.home : result.away;
+              const userSecondsPlayed = Object.fromEntries(
+                userBox.players.map((p) => [p.playerId, p.secondsPlayed]),
+              );
+              onComplete(result.home.points, result.away.points, userSecondsPlayed);
+            }}>
               Continue →
             </button>
           </div>

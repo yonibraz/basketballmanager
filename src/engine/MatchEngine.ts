@@ -232,9 +232,16 @@ export class MatchEngine {
    * Choose a starting five. Prefer the best-rated available player at each
    * position; if a position is unfilled, take the best remaining player of any
    * position. This keeps the engine robust to lopsided rosters.
+   * Injured players are excluded unless there are fewer than 5 healthy players
+   * (game must go on with whoever is available).
    */
   private pickStartingFive(states: PlayerState[]): PlayerState[] {
-    const available = [...states].sort(
+    const healthy = states.filter(
+      (s) => !(s.player.injuryWeeksLeft && s.player.injuryWeeksLeft > 0),
+    );
+    // Fall back to full roster if bench depth is too thin after injuries.
+    const pool = healthy.length >= 5 ? healthy : states;
+    const available = [...pool].sort(
       (a, b) => overallRating(b.player) - overallRating(a.player),
     );
     const chosen: PlayerState[] = [];
@@ -386,7 +393,12 @@ export class MatchEngine {
   substitute(side: LiveSide, outId: string, inId: string): boolean {
     const team = this.side(side);
     const idx = team.lineup.findIndex((s) => s.player.id === outId);
-    const incoming = team.states.find((s) => s.player.id === inId && !s.onCourt);
+    const incoming = team.states.find(
+      (s) =>
+        s.player.id === inId &&
+        !s.onCourt &&
+        !(s.player.injuryWeeksLeft && s.player.injuryWeeksLeft > 0),
+    );
     if (idx === -1 || !incoming) return false;
     const outgoing = team.lineup[idx]!;
     outgoing.onCourt = false;
@@ -869,10 +881,15 @@ export class MatchEngine {
     }
   }
 
-  /** Freshest bench player still eligible to enter (not on court, not DQ'd). */
+  /** Freshest bench player still eligible to enter (not on court, not DQ'd, not injured). */
   private freshestBench(team: TeamState): PlayerState | undefined {
     return team.states
-      .filter((s) => !s.onCourt && !s.fouledOut)
+      .filter(
+        (s) =>
+          !s.onCourt &&
+          !s.fouledOut &&
+          !(s.player.injuryWeeksLeft && s.player.injuryWeeksLeft > 0),
+      )
       .sort((a, b) => a.fatigue - b.fatigue)[0];
   }
 
@@ -956,9 +973,13 @@ function clamp(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v;
 }
 
-/** Helper: build an {@link OnCourt} lineup map from five players by position. */
+/** Helper: build an {@link OnCourt} lineup map from five players by position.
+ * Injured players are excluded; if fewer than 5 healthy players are available
+ * the full roster is used so the game can still proceed. */
 export function lineupFromPlayers(players: Player[]): OnCourt {
-  const byPos = (pos: Position) => players.find((p) => p.position === pos) ?? players[0]!;
+  const healthy = players.filter((p) => !(p.injuryWeeksLeft && p.injuryWeeksLeft > 0));
+  const pool = healthy.length >= 5 ? healthy : players;
+  const byPos = (pos: Position) => pool.find((p) => p.position === pos) ?? pool[0]!;
   return {
     PG: byPos("PG"),
     SG: byPos("SG"),

@@ -121,7 +121,7 @@ export default function Page() {
             onNav={(t) => setTab(t as Tab)}
           />
         )}
-        {tab === "roster" && <Roster team={team} config={config} />}
+        {tab === "roster" && <Roster team={team} config={config} injuredPlayers={game.injuredPlayers} />}
         {tab === "schedule" && (
           <Standings league={game.league} userTeamId={userTeamId} currentMatchday={game.currentMatchday} />
         )}
@@ -182,7 +182,7 @@ function MatchScreen({
       fixture={fixture}
       userTeamId={userTeamId}
       tactics={game.tactics}
-      onComplete={(h, a) => game.completeMatchday(fixture, h, a)}
+      onComplete={(h, a, secs) => game.completeMatchday(fixture, h, a, secs)}
     />
   );
 }
