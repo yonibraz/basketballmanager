@@ -2,7 +2,8 @@
  * MatchEngine — a deterministic, possession-by-possession basketball match
  * simulator built on a Markov-chain possession cycle and a 24-second shot
  * clock (FIBA rules: 40-minute games, four 10-minute quarters, 5-minute
- * overtimes).
+ * overtimes; shot clock resets to 14s after an offensive rebound; a player is
+ * disqualified on their 5th personal foul).
  *
  * The engine is pure: it has no knowledge of the UI, the database, or the
  * network. It takes two teams, their tactics, and a seed, and returns a
@@ -47,6 +48,12 @@ const PERIOD_SECONDS = 600; // 10-minute quarter
 const REGULATION_PERIODS = 4;
 const OVERTIME_SECONDS = 300; // 5-minute overtime
 const SHOT_CLOCK = 24;
+// FIBA resets the shot clock to 14s (not a full 24) when the offense retains
+// possession via an offensive rebound in the frontcourt.
+const SHOT_CLOCK_AFTER_OREB = 14;
+// FIBA Art. 39: a player charged with 5 personal fouls is disqualified and
+// must leave the game.
+const MAX_PERSONAL_FOULS = 5;
 const CLUTCH_TIME_SECONDS = 120; // final two minutes
 
 // Substitute a starter once their fatigue passes this and a fresher option
@@ -61,6 +68,8 @@ interface PlayerState {
   box: PlayerBoxScore;
   fatigue: number; // 0 (fresh) .. 1 (gassed)
   onCourt: boolean;
+  // Disqualified after a 5th personal foul (FIBA). Cannot return to the floor.
+  fouledOut: boolean;
 }
 
 interface TeamState {
@@ -149,6 +158,7 @@ export class MatchEngine {
       box: blankBox(player),
       fatigue: 0,
       onCourt: false,
+      fouledOut: false,
     }));
 
     const lineup = this.pickStartingFive(states);
@@ -231,9 +241,13 @@ export class MatchEngine {
     // possession by period to approximate the possession arrow.
     let offense = this.period % 2 === 1 ? this.home : this.away;
     let defense = offense === this.home ? this.away : this.home;
+    // A possession that follows an offensive rebound runs off a 14s shot clock
+    // (FIBA reset), not a fresh 24.
+    let afterOffReb = false;
 
     while (remaining > 0) {
-      const duration = this.possessionDuration(offense, defense, remaining);
+      const shotClock = afterOffReb ? SHOT_CLOCK_AFTER_OREB : SHOT_CLOCK;
+      const duration = this.possessionDuration(offense, defense, remaining, shotClock);
       remaining -= duration;
       this.clock += duration;
 
@@ -248,6 +262,9 @@ export class MatchEngine {
       this.maybeSubstitute(offense);
       this.maybeSubstitute(defense);
 
+      // `retained` is true only on an offensive rebound; the next possession by
+      // the same offense then gets the shortened 14s clock.
+      afterOffReb = retained;
       if (!retained) {
         const t = offense;
         offense = defense;
@@ -261,14 +278,19 @@ export class MatchEngine {
   /**
    * Possession length in seconds, derived from both teams' pace tactics. A
    * faster pace shortens possessions (more possessions per game). Clamped to
-   * the [4, SHOT_CLOCK] window and never longer than the time left in the
-   * period.
+   * the [4, shotClock] window and never longer than the time left in the
+   * period. `shotClock` is 24 normally, or 14 after an offensive rebound.
    */
-  private possessionDuration(offense: TeamState, defense: TeamState, remaining: number): number {
+  private possessionDuration(
+    offense: TeamState,
+    defense: TeamState,
+    remaining: number,
+    shotClock: number = SHOT_CLOCK,
+  ): number {
     const avgPace = (offense.tactics.pace + defense.tactics.pace) / 2; // 0..100
     const base = 17 - (avgPace - 50) * 0.12; // ~11s (fast) .. ~23s (slow)
     const noise = this.rng.int(-3, 3);
-    const dur = Math.max(4, Math.min(SHOT_CLOCK, Math.round(base + noise)));
+    const dur = Math.max(4, Math.min(shotClock, Math.round(base + noise)));
     return Math.min(dur, remaining);
   }
 
@@ -341,14 +363,7 @@ export class MatchEngine {
       (zone === "inside" ? 0.13 : isThree ? 0.03 : 0.06) +
       (defense.tactics.pressingIntensity / 100) * 0.04;
     if (this.rng.chance(foulProb)) {
-      defender.box.fouls++;
-      this.emit({
-        type: "foul",
-        period: this.period,
-        clock: this.clock,
-        teamId: defense.team.id,
-        playerId: defender.player.id,
-      });
+      this.commitFoul(defense, defender);
       this.shootFreeThrows(offense, shooter, isThree ? 3 : 2);
       return false; // ball changes hands after the final free throw
     }
@@ -565,11 +580,8 @@ export class MatchEngine {
       const tired = team.lineup[i]!;
       if (tired.fatigue < FATIGUE_SUB_THRESHOLD) continue;
 
-      // Find the freshest competent bench player.
-      const bench = team.states
-        .filter((s) => !s.onCourt)
-        .sort((a, b) => a.fatigue - b.fatigue);
-      const replacement = bench[0];
+      // Find the freshest eligible bench player (never a disqualified one).
+      const replacement = this.freshestBench(team);
       if (!replacement || replacement.fatigue > tired.fatigue - 0.1) continue;
 
       tired.onCourt = false;
@@ -584,6 +596,47 @@ export class MatchEngine {
         detail: `for ${tired.box.name}`,
       });
     }
+  }
+
+  /** Freshest bench player still eligible to enter (not on court, not DQ'd). */
+  private freshestBench(team: TeamState): PlayerState | undefined {
+    return team.states
+      .filter((s) => !s.onCourt && !s.fouledOut)
+      .sort((a, b) => a.fatigue - b.fatigue)[0];
+  }
+
+  /**
+   * Charge a personal foul. On the 5th foul the player is disqualified (FIBA)
+   * and is immediately replaced by the freshest eligible bench player. If no
+   * substitute is available the team plays on a man short.
+   */
+  private commitFoul(team: TeamState, fouler: PlayerState): void {
+    fouler.box.fouls++;
+    this.emit({
+      type: "foul",
+      period: this.period,
+      clock: this.clock,
+      teamId: team.team.id,
+      playerId: fouler.player.id,
+    });
+    if (fouler.box.fouls < MAX_PERSONAL_FOULS || fouler.fouledOut) return;
+
+    fouler.fouledOut = true;
+    const replacement = this.freshestBench(team);
+    const slot = team.lineup.indexOf(fouler);
+    if (replacement && slot !== -1) {
+      fouler.onCourt = false;
+      replacement.onCourt = true;
+      team.lineup[slot] = replacement;
+    }
+    this.emit({
+      type: "foul-out",
+      period: this.period,
+      clock: this.clock,
+      teamId: team.team.id,
+      playerId: fouler.player.id,
+      detail: replacement ? `replaced by ${replacement.box.name}` : "no substitute available",
+    });
   }
 
   // -------------------------------------------------------------------------

@@ -12,6 +12,7 @@ const DISPLAYABLE = new Set<MatchEvent["type"]>([
   "turnover",
   "steal",
   "block",
+  "foul-out",
   "substitution",
   "period-end",
   "final",
@@ -69,6 +70,8 @@ function describe(e: MatchEvent, name: string): { text: string; cls: string } {
       return { text: `${name} steals it`, cls: "" };
     case "block":
       return { text: `${name} blocks the shot`, cls: "" };
+    case "foul-out":
+      return { text: `${name} fouls out`, cls: "bad" };
     case "substitution":
       return { text: `Substitution: ${name} ${e.detail ?? ""}`, cls: "bad" };
     case "period-end":
