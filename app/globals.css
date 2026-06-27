@@ -129,7 +129,27 @@ input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; border-radius
 .ev .t { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; min-width: 42px; }
 .ev.score { border-color: rgba(52,211,153,0.35); }
 .ev.bad { color: var(--muted); }
+.ev.timeout { border-color: rgba(251,191,36,0.45); color: var(--accent-2); font-weight: 700; }
 @keyframes pop { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
+/* Live coaching: momentum bar */
+.momentum { position: relative; height: 6px; margin-top: 8px; border-radius: 999px; background: var(--bg-elev); border: 1px solid var(--line); overflow: hidden; }
+.momentum::after { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--line); }
+.mo-home { position: absolute; right: 50%; top: 0; bottom: 0; background: linear-gradient(90deg, transparent, var(--accent)); transition: width 0.3s ease; }
+.mo-away { position: absolute; left: 50%; top: 0; bottom: 0; background: linear-gradient(90deg, var(--blue), transparent); transition: width 0.3s ease; }
+
+/* Live coaching: control bar + panels */
+.coach-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 12px; }
+.coach-bar .btn { width: 100%; padding: 8px 4px; font-size: 12px; }
+.coach-panel { margin-top: 10px; margin-bottom: 0; }
+
+.sub-grid { display: flex; flex-direction: column; gap: 6px; }
+.sub-chip { display: flex; align-items: center; gap: 8px; text-align: left; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg-elev); color: var(--text); cursor: pointer; }
+.sub-chip.on { border-color: rgba(249,115,22,0.35); }
+.sub-chip.sel { border-color: var(--accent); background: rgba(249,115,22,0.12); }
+.sub-chip:disabled { opacity: 0.4; cursor: default; }
+.sub-chip .sub-nm { font-weight: 700; font-size: 13px; }
+.sub-chip .sub-meta { margin-left: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 
 /* Misc */
 .muted { color: var(--muted); }

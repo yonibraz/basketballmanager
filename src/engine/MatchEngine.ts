@@ -53,6 +53,43 @@ const CLUTCH_TIME_SECONDS = 120; // final two minutes
 // exists on the bench.
 const FATIGUE_SUB_THRESHOLD = 0.62;
 
+// In live mode the manager controls subs for their own team, so the engine only
+// auto-pulls one of their players in an emergency (near-total exhaustion).
+const FATIGUE_EMERGENCY_THRESHOLD = 0.92;
+
+// Team timeouts available per game in interactive mode.
+const TIMEOUTS_PER_GAME = 5;
+
+/** Which side of the matchup, from the engine's point of view. */
+export type LiveSide = "home" | "away";
+
+/** A live decision point surfaced to the UI after a {@link MatchEngine.step}. */
+export type Stoppage = null | "period-end" | "final";
+
+/** Lightweight per-player snapshot for the live coaching UI. */
+export interface SquadPlayer {
+  id: string;
+  name: string;
+  position: Position;
+  onCourt: boolean;
+  fatigue: number;
+  fouls: number;
+  points: number;
+  secondsPlayed: number;
+}
+
+/** Scoreboard-level snapshot for the live UI. */
+export interface LiveState {
+  period: number;
+  clock: number;
+  homeScore: number;
+  awayScore: number;
+  /** -1 (all away) .. +1 (all home); 0 is neutral. */
+  momentum: number;
+  done: boolean;
+  overtime: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Internal per-game state
 // ---------------------------------------------------------------------------
@@ -69,6 +106,10 @@ interface TeamState {
   box: TeamBoxScore;
   states: PlayerState[];
   lineup: PlayerState[]; // exactly five on the floor
+  // --- Live (interactive) state; inert in batch mode -----------------------
+  timeoutsLeft: number;
+  /** Manager-assigned defensive focus: `defenderId` shadows `targetId`. */
+  defAssignment: { targetId: string; defenderId: string } | null;
 }
 
 function blankBox(player: Player): PlayerBoxScore {
@@ -125,9 +166,21 @@ export class MatchEngine {
   private clock = 0; // seconds elapsed from tip-off
   private overtime = false;
 
+  // --- Live (interactive) driver state; unused on the batch path -----------
+  private readonly live: boolean;
+  private started = false;
+  private liveDone = false;
+  private liveRemaining = 0;
+  private liveOffense!: TeamState;
+  private liveDefense!: TeamState;
+  private managedSide: LiveSide | null = null;
+  /** Game-flow momentum: -1 (away hot) .. +1 (home hot). Live-only. */
+  private momentum = 0;
+
   constructor(private readonly input: MatchInput) {
     this.rng = new Rng(input.seed);
     this.recordEvents = input.recordEvents ?? true;
+    this.live = input.live ?? false;
     this.home = this.buildTeamState(input.home, input.homeTactics ?? DEFAULT_TACTICS);
     this.away = this.buildTeamState(input.away, input.awayTactics ?? DEFAULT_TACTICS);
   }
@@ -160,6 +213,8 @@ export class MatchEngine {
       box: { teamId: team.id, teamName: team.name, points: 0, players: states.map((s) => s.box) },
       states,
       lineup,
+      timeoutsLeft: TIMEOUTS_PER_GAME,
+      defAssignment: null,
     };
   }
 
@@ -222,6 +277,193 @@ export class MatchEngine {
       seed: this.input.seed,
       overtime: this.overtime,
     };
+  }
+
+  // -------------------------------------------------------------------------
+  // Live (interactive) driver
+  //
+  // Mirrors `run()` / `playPeriod()` one possession at a time so the UI can
+  // pause between possessions for manager decisions. Reuses the same private
+  // possession helpers, so an unmanaged live game plays out like a batch game
+  // of the same character (it is not seed-identical — that is intentional, as
+  // manager actions are meant to change the result).
+  // -------------------------------------------------------------------------
+
+  /** Begin an interactive game. `managedSide` is the human-coached team. */
+  startLive(managedSide?: LiveSide): void {
+    if (this.started) return;
+    this.started = true;
+    this.managedSide = managedSide ?? null;
+    this.period = 1;
+    this.emit({ type: "tip-off", period: 1, clock: 0 });
+    this.beginPeriod();
+  }
+
+  /** Set up `liveRemaining`/offense/defense for the current period. */
+  private beginPeriod(): void {
+    this.liveRemaining = this.period <= REGULATION_PERIODS ? PERIOD_SECONDS : OVERTIME_SECONDS;
+    this.liveOffense = this.period % 2 === 1 ? this.home : this.away;
+    this.liveDefense = this.liveOffense === this.home ? this.away : this.home;
+  }
+
+  /**
+   * Advance the live game by exactly one possession. Returns the events emitted
+   * this step plus whether a decision point (period break or final) was hit.
+   */
+  step(): { events: MatchEvent[]; stoppage: Stoppage } {
+    if (!this.started || this.liveDone) {
+      return { events: [], stoppage: this.liveDone ? "final" : null };
+    }
+    const start = this.events.length;
+
+    const offense = this.liveOffense;
+    const defense = this.liveDefense;
+    const duration = this.possessionDuration(offense, defense, this.liveRemaining);
+    this.liveRemaining -= duration;
+    this.clock += duration;
+
+    this.applyFatigue(offense, duration);
+    this.applyFatigue(defense, duration);
+    this.creditMinutes(offense, duration);
+    this.creditMinutes(defense, duration);
+    this.decayMomentum();
+
+    const retained = this.runPossession(offense, defense);
+    this.maybeSubstitute(offense);
+    this.maybeSubstitute(defense);
+    if (!retained) {
+      this.liveOffense = defense;
+      this.liveDefense = offense;
+    }
+
+    let stoppage: Stoppage = null;
+    if (this.liveRemaining <= 0) {
+      this.emit({ type: "period-end", period: this.period, clock: this.clock });
+      const tie = this.home.box.points === this.away.box.points;
+      if (this.period < REGULATION_PERIODS || tie) {
+        if (tie && this.period >= REGULATION_PERIODS) this.overtime = true;
+        this.period++;
+        this.beginPeriod();
+        stoppage = "period-end";
+      } else {
+        this.emit({ type: "final", period: this.period, clock: this.clock });
+        this.liveDone = true;
+        stoppage = "final";
+      }
+    }
+    return { events: this.events.slice(start), stoppage };
+  }
+
+  // ---- Manager hooks (live-only) ------------------------------------------
+
+  /** Call a timeout: swing momentum to the caller and rest their five. */
+  requestTimeout(side: LiveSide): boolean {
+    const team = this.side(side);
+    if (this.liveDone || team.timeoutsLeft <= 0) return false;
+    team.timeoutsLeft--;
+    this.momentum = side === "home" ? Math.max(this.momentum, 0.45) : Math.min(this.momentum, -0.45);
+    for (const s of team.lineup) s.fatigue = Math.max(0, s.fatigue - 0.05);
+    this.emit({ type: "timeout", period: this.period, clock: this.clock, teamId: team.team.id });
+    return true;
+  }
+
+  /** Swap a team's tactics mid-game; takes effect on the next possession. */
+  setTeamTactics(side: LiveSide, tactics: Tactics): void {
+    this.side(side).tactics = tactics;
+  }
+
+  /** Manually substitute `inId` (on the bench) for `outId` (on the floor). */
+  substitute(side: LiveSide, outId: string, inId: string): boolean {
+    const team = this.side(side);
+    const idx = team.lineup.findIndex((s) => s.player.id === outId);
+    const incoming = team.states.find((s) => s.player.id === inId && !s.onCourt);
+    if (idx === -1 || !incoming) return false;
+    const outgoing = team.lineup[idx]!;
+    outgoing.onCourt = false;
+    incoming.onCourt = true;
+    team.lineup[idx] = incoming;
+    this.emit({
+      type: "substitution",
+      period: this.period,
+      clock: this.clock,
+      teamId: team.team.id,
+      playerId: incoming.player.id,
+      detail: `for ${outgoing.box.name}`,
+    });
+    return true;
+  }
+
+  /**
+   * Assign one of `side`'s on-court defenders to shadow an opponent scorer.
+   * Pass a null target to clear the assignment.
+   */
+  setDefensiveTarget(side: LiveSide, targetId: string | null, defenderId?: string): void {
+    this.side(side).defAssignment = targetId && defenderId ? { targetId, defenderId } : null;
+  }
+
+  // ---- Live accessors for the UI ------------------------------------------
+
+  getLiveState(): LiveState {
+    return {
+      period: this.period,
+      clock: this.clock,
+      homeScore: this.home.box.points,
+      awayScore: this.away.box.points,
+      momentum: this.momentum,
+      done: this.liveDone,
+      overtime: this.overtime,
+    };
+  }
+
+  getSquad(side: LiveSide): SquadPlayer[] {
+    return this.side(side).states.map((s) => ({
+      id: s.player.id,
+      name: `${s.player.firstName} ${s.player.lastName}`.trim(),
+      position: s.player.position,
+      onCourt: s.onCourt,
+      fatigue: s.fatigue,
+      fouls: s.box.fouls,
+      points: s.box.points,
+      secondsPlayed: s.box.secondsPlayed,
+    }));
+  }
+
+  timeoutsRemaining(side: LiveSide): number {
+    return this.side(side).timeoutsLeft;
+  }
+
+  /** The finished (or in-progress) result, for the box-score screen. */
+  getResult(): MatchResult {
+    return {
+      home: this.home.box,
+      away: this.away.box,
+      events: this.events,
+      periods: this.period,
+      seed: this.input.seed,
+      overtime: this.overtime,
+    };
+  }
+
+  private side(side: LiveSide): TeamState {
+    return side === "home" ? this.home : this.away;
+  }
+
+  // ---- Momentum (live-only, pure arithmetic — never draws RNG) -------------
+
+  private decayMomentum(): void {
+    this.momentum *= 0.85;
+    if (Math.abs(this.momentum) < 0.01) this.momentum = 0;
+  }
+
+  private bumpMomentum(offense: TeamState, points: number): void {
+    const dir = offense === this.home ? 1 : -1;
+    this.momentum = Math.max(-1, Math.min(1, this.momentum + dir * points * 0.06));
+  }
+
+  /** Additive make-probability bonus for whichever side currently holds momentum. */
+  private momentumBonus(offense: TeamState): number {
+    const m = offense === this.home ? this.momentum : -this.momentum;
+    return m > 0 ? Math.min(m, 1) * 0.06 : 0;
   }
 
   /** Plays one period of the supplied length, alternating possessions. */
@@ -290,7 +532,7 @@ export class MatchEngine {
     }
 
     // --- Decision: shooter & shot zone ------------------------------------
-    const shooter = this.pickShooter(offense);
+    const shooter = this.pickShooter(offense, defense);
     const zone = this.pickZone(shooter, offense.tactics);
     return this.executeShot(offense, defense, handler, shooter, zone);
   }
@@ -331,10 +573,16 @@ export class MatchEngine {
     zone: ShotZone,
   ): boolean {
     const isThree = zone === "three";
-    const defender =
+    let defender =
       zone === "inside"
         ? this.bestDefender(defense, "defInterior")
         : this.bestDefender(defense, "defPerimeter");
+    // Live-only: a manager defensive assignment puts the chosen defender onto
+    // the targeted scorer (and contests harder — see `contest` below).
+    if (this.live && defense.defAssignment && shooter.player.id === defense.defAssignment.targetId) {
+      const assigned = defense.lineup.find((s) => s.player.id === defense.defAssignment!.defenderId);
+      if (assigned) defender = assigned;
+    }
 
     // Shooting foul check — more likely inside and against heavy pressing.
     const foulProb =
@@ -364,7 +612,13 @@ export class MatchEngine {
       ? this.eff(defender, (a) => a.defInterior)
       : this.eff(defender, (a) => a.defPerimeter);
 
-    let makeProb = matchup(offAttr, defAttr, SHOT_BASELINES[zone]);
+    // Live-only: an assigned defender contests the targeted scorer harder.
+    const contest =
+      this.live && defense.defAssignment?.targetId === shooter.player.id ? 2 : 0;
+
+    let makeProb = matchup(offAttr, defAttr + contest, SHOT_BASELINES[zone]);
+    // Live-only: a hot team converts at a slightly higher clip.
+    if (this.live) makeProb = clamp(makeProb + this.momentumBonus(offense));
     // Clutch swing in the final two minutes of a one-possession game.
     if (this.isClutchTime()) {
       const margin = Math.abs(this.home.box.points - this.away.box.points);
@@ -487,12 +741,16 @@ export class MatchEngine {
     return team.lineup[this.rng.weightedIndex(weights)]!;
   }
 
-  private pickShooter(team: TeamState): PlayerState {
+  private pickShooter(team: TeamState, defense?: TeamState): PlayerState {
     // Usage concentrates on better offensive players; starRotation sharpens it.
     const sharpen = 1 + team.tactics.starRotation / 120;
-    const weights = team.lineup.map((s) =>
-      Math.pow(Math.max(1, this.eff(s, () => offenseRating(s.player))), sharpen),
-    );
+    // Live-only: a defensive assignment denies touches to the targeted scorer.
+    const denyId = this.live ? defense?.defAssignment?.targetId : undefined;
+    const weights = team.lineup.map((s) => {
+      let w = Math.pow(Math.max(1, this.eff(s, () => offenseRating(s.player))), sharpen);
+      if (denyId && s.player.id === denyId) w *= 0.8;
+      return w;
+    });
     return team.lineup[this.rng.weightedIndex(weights)]!;
   }
 
@@ -561,9 +819,15 @@ export class MatchEngine {
 
   private maybeSubstitute(team: TeamState): void {
     if (team.states.length <= 5) return; // no bench
+    // Live-only: the manager handles their own rotation, so the engine only
+    // steps in for an emergency on the human-coached team.
+    const threshold =
+      this.live && this.managedSide && this.side(this.managedSide) === team
+        ? FATIGUE_EMERGENCY_THRESHOLD
+        : FATIGUE_SUB_THRESHOLD;
     for (let i = 0; i < team.lineup.length; i++) {
       const tired = team.lineup[i]!;
-      if (tired.fatigue < FATIGUE_SUB_THRESHOLD) continue;
+      if (tired.fatigue < threshold) continue;
 
       // Find the freshest competent bench player.
       const bench = team.states
@@ -597,6 +861,7 @@ export class MatchEngine {
   private score(team: TeamState, scorer: PlayerState, points: number): void {
     scorer.box.points += points;
     team.box.points += points;
+    if (this.live) this.bumpMomentum(team, points);
   }
 
   private isClutchTime(): boolean {
