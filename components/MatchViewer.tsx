@@ -5,6 +5,8 @@ import type { MatchEvent, MatchResult, TeamBoxScore } from "@/src/types";
 import { type Fixture, type League, simulateFixture, teamById } from "@/lib/league";
 import type { Tactics } from "@/src/types";
 import { gameClock } from "@/lib/ratings";
+import { Crest } from "@/components/Crest";
+import { Icon } from "@/components/Icon";
 
 const DISPLAYABLE = new Set<MatchEvent["type"]>([
   "made-fg",
@@ -82,16 +84,20 @@ function describe(e: MatchEvent, name: string): { text: string; cls: string } {
 
 function BoxTable({ box, userId }: { box: TeamBoxScore; userId: string }) {
   const players = [...box.players].filter((p) => p.secondsPlayed > 0).sort((a, b) => b.points - a.points).slice(0, 6);
+  const isUser = box.teamId === userId;
   return (
-    <div className="card tight">
-      <div className="spread" style={{ marginBottom: 4 }}>
-        <strong style={{ color: box.teamId === userId ? "var(--accent)" : undefined }}>{box.teamName}</strong>
+    <div className="card tight" style={{ borderColor: isUser ? "var(--line-strong)" : undefined }}>
+      <div className="spread boxhead">
+        <strong className="boxteam">
+          <Crest id={box.teamId} short={box.teamName} size={20} />
+          {box.teamName}
+        </strong>
         <strong>{box.points}</strong>
       </div>
       <table className="table">
         <thead>
           <tr>
-            <th>Player</th>
+            <th className="l">Player</th>
             <th>PTS</th>
             <th>REB</th>
             <th>AST</th>
@@ -100,7 +106,7 @@ function BoxTable({ box, userId }: { box: TeamBoxScore; userId: string }) {
         <tbody>
           {players.map((p) => (
             <tr key={p.playerId}>
-              <td style={{ textAlign: "left" }}>{p.name}</td>
+              <td className="l">{p.name}</td>
               <td>{p.points}</td>
               <td>{p.offensiveRebounds + p.defensiveRebounds}</td>
               <td>{p.assists}</td>
@@ -164,16 +170,18 @@ export function MatchViewer({
   return (
     <div className="screen">
       <div className="scoreboard">
-        <div className="sb-team">
-          <div className="nm" style={{ color: fixture.homeId === userTeamId ? "var(--accent)" : undefined }}>{homeCfg.short}</div>
+        <div className={`sb-team ${fixture.homeId === userTeamId ? "user" : ""}`}>
+          <Crest id={fixture.homeId} short={homeCfg.short} size={34} />
+          <div className="nm">{homeCfg.short}</div>
           <div className="sc">{homeScore}</div>
         </div>
         <div className="sb-mid">
           <div className="clock">{clk.quarter}</div>
           <div>{phase === "done" ? (result.overtime ? "FINAL/OT" : "FINAL") : clk.mmss}</div>
         </div>
-        <div className="sb-team">
-          <div className="nm" style={{ color: fixture.awayId === userTeamId ? "var(--accent)" : undefined }}>{awayCfg.short}</div>
+        <div className={`sb-team ${fixture.awayId === userTeamId ? "user" : ""}`}>
+          <Crest id={fixture.awayId} short={awayCfg.short} size={34} />
+          <div className="nm">{awayCfg.short}</div>
           <div className="sc">{awayScore}</div>
         </div>
       </div>
@@ -184,7 +192,7 @@ export function MatchViewer({
             {homeCfg.name} host {awayCfg.name}. Your tactics are locked in.
           </p>
           <button className="btn btn-primary" onClick={() => setPhase("play")}>
-            ▶ Tip-off
+            <Icon name="play" size={16} /> Tip-off
           </button>
         </div>
       )}
@@ -193,7 +201,7 @@ export function MatchViewer({
         <>
           <div className="btn-row" style={{ marginTop: 12 }}>
             <button className="btn btn-sm" style={{ flex: 1 }} onClick={() => setPaused((p) => !p)}>
-              {paused ? "▶ Resume" : "⏸ Pause"}
+              <Icon name={paused ? "play" : "pause"} size={14} /> {paused ? "Resume" : "Pause"}
             </button>
             <button
               className="btn btn-sm"
@@ -210,7 +218,7 @@ export function MatchViewer({
                 setPhase("done");
               }}
             >
-              ⏭ Skip
+              <Icon name="skip" size={14} /> Skip
             </button>
           </div>
           <div className="feed">
@@ -244,7 +252,7 @@ export function MatchViewer({
             style={{ marginTop: 8 }}
             onClick={() => onComplete(result.home.points, result.away.points)}
           >
-            Continue →
+            Continue <Icon name="chevronRight" size={15} />
           </button>
         </div>
       )}

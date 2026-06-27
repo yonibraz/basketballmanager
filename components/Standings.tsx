@@ -1,6 +1,7 @@
 "use client";
 
 import { type League, TOTAL_MATCHDAYS, fixturesForMatchday, sortedStandings } from "@/lib/league";
+import { Crest } from "@/components/Crest";
 
 export function Standings({
   league,
@@ -23,6 +24,7 @@ export function Standings({
           <thead>
             <tr>
               <th className="pos">#</th>
+              <th className="crest-cell"></th>
               <th>Club</th>
               <th>P</th>
               <th>W</th>
@@ -37,7 +39,8 @@ export function Standings({
               return (
                 <tr key={s.teamId} className={s.teamId === userTeamId ? "me" : ""}>
                   <td className="pos">{i + 1}</td>
-                  <td>{cfg.name}</td>
+                  <td className="crest-cell"><Crest id={cfg.id} short={cfg.short} size={18} /></td>
+                  <td className="club">{cfg.name}</td>
                   <td>{s.played}</td>
                   <td>{s.wins}</td>
                   <td>{s.losses}</td>
@@ -58,15 +61,21 @@ export function Standings({
           const away = league.configs[f.awayId]!;
           const mine = f.homeId === userTeamId || f.awayId === userTeamId;
           return (
-            <div key={`${f.homeId}-${f.awayId}`} className="spread" style={{ padding: "8px 2px", borderTop: "1px solid var(--line)" }}>
-              <span style={{ fontWeight: mine ? 800 : 500, color: mine ? "var(--accent)" : undefined }}>
-                {home.short}
+            <div
+              key={`${f.homeId}-${f.awayId}`}
+              className="fixture"
+              style={{ fontWeight: mine ? 700 : 500, color: mine ? "#fff" : undefined }}
+            >
+              <span className="fx-team fx-home">
+                <span className="fx-nm">{home.short}</span>
+                <Crest id={home.id} short={home.short} size={20} />
               </span>
-              <span className="muted" style={{ fontVariantNumeric: "tabular-nums" }}>
-                {f.played ? `${f.homeScore} – ${f.awayScore}` : "vs"}
+              <span className="fx-score">
+                {f.played ? `${f.homeScore}–${f.awayScore}` : "vs"}
               </span>
-              <span style={{ fontWeight: mine ? 800 : 500, color: mine ? "var(--accent)" : undefined, textAlign: "right" }}>
-                {away.short}
+              <span className="fx-team fx-away">
+                <Crest id={away.id} short={away.short} size={20} />
+                <span className="fx-nm">{away.short}</span>
               </span>
             </div>
           );
