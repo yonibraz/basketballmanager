@@ -103,3 +103,17 @@ describe("MatchEngine event-stream toggle", () => {
     expect(r.home.points).toBeGreaterThan(0);
   });
 });
+
+describe("MatchEngine robustness to degenerate inputs", () => {
+  it("does not throw when players have all-zero shooting/strength attributes", () => {
+    // Caller-supplied teams may come from nullable DB columns; zeroed shooting
+    // and strength must not make pickZone's weights sum to zero (regression).
+    const { home, away } = teams();
+    for (const p of home.players) {
+      p.attributes.shootingInside = 0;
+      p.attributes.shootingOutside = 0;
+      p.attributes.strength = 0;
+    }
+    expect(() => MatchEngine.simulate({ home, away, seed: 42 })).not.toThrow();
+  });
+});

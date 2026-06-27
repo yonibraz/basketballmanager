@@ -510,7 +510,14 @@ export class MatchEngine {
       threeW *= 1.6;
       insideW *= 0.8;
     }
-    return this.rng.weightedPick(["inside", "mid", "three"] as const, [insideW, midW, threeW]);
+    // Floor each weight so a player with all-zero shooting/strength (possible
+    // for caller-supplied teams loaded from nullable DB columns) can never make
+    // the weights sum to zero — which would throw in weightedPick. Consistent
+    // with the Math.max floors used by the other on-court selectors.
+    return this.rng.weightedPick(
+      ["inside", "mid", "three"] as const,
+      [Math.max(0.1, insideW), Math.max(0.1, midW), Math.max(0.1, threeW)],
+    );
   }
 
   private assistProbability(handler: PlayerState, zone: ShotZone): number {

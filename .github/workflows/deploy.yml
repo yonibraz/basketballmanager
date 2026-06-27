@@ -11,10 +11,12 @@ permissions:
   pages: write
   id-token: write
 
-# Only one Pages deployment at a time; newer pushes supersede in-progress ones.
+# Only one Pages deployment at a time. Do NOT cancel an in-progress run:
+# cancelling mid-publish (the actions/deploy-pages step) can leave the live
+# site on a stale artifact or a failed deployment. New pushes queue instead.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
