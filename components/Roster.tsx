@@ -6,6 +6,7 @@ import { LEAGUE_QUOTAS } from "@/src/rosters/quotas";
 import { validateRoster } from "@/src/rosters/validation";
 import type { TeamConfig } from "@/lib/league";
 import { isForeign, overall } from "@/lib/ratings";
+import { Icon } from "@/components/Icon";
 
 export function Roster({ team, config }: { team: Team; config: TeamConfig }) {
   const rule = LEAGUE_QUOTAS[config.quotaRuleId] ?? LEAGUE_QUOTAS.GEN_DOMESTIC!;
@@ -27,24 +28,24 @@ export function Roster({ team, config }: { team: Team; config: TeamConfig }) {
             <div className="l">Squad</div>
           </div>
           <div className="stat">
-            <div className="n" style={{ color: "var(--blue)" }}>{report.summary.foreign}</div>
+            <div className="n">{report.summary.foreign}</div>
             <div className="l">Foreign</div>
           </div>
           <div className="stat">
-            <div className="n" style={{ color: "var(--accent-2)" }}>{report.summary.homegrown}</div>
+            <div className="n">{report.summary.homegrown}</div>
             <div className="l">Homegrown</div>
           </div>
         </div>
         <div style={{ marginTop: 12 }} className="spread">
           <span className="muted" style={{ fontSize: 12 }}>{rule.name} registration</span>
           {report.valid ? (
-            <span className="badge ok">✓ Compliant</span>
+            <span className="badge ok"><Icon name="check" size={12} /> Compliant</span>
           ) : (
-            <span className="badge warn">✕ {report.violations.length} issue(s)</span>
+            <span className="badge warn"><Icon name="x" size={12} /> {report.violations.length} issue(s)</span>
           )}
         </div>
         {!report.valid && (
-          <ul style={{ marginTop: 8, paddingLeft: 18, color: "var(--red)", fontSize: 12 }}>
+          <ul style={{ marginTop: 8, paddingLeft: 18, color: "var(--muted)", fontSize: 12 }}>
             {report.violations.map((v) => (
               <li key={v.code}>{v.message}</li>
             ))}
@@ -55,17 +56,18 @@ export function Roster({ team, config }: { team: Team; config: TeamConfig }) {
       <div className="plist">
         {players.map((p) => (
           <div key={p.id} className="prow">
-            <div className="pos-chip">{p.position}</div>
-            <div>
+            <div className="pavatar">{`${p.firstName[0] ?? ""}${p.lastName[0] ?? ""}`}</div>
+            <div style={{ minWidth: 0 }}>
               <div className="pname">
                 {p.firstName} {p.lastName}
               </div>
               <div className="pmeta">
-                {p.nationality} · {p.age}y
+                <span className="pos-tag">{p.position}</span>
+                <span>{p.nationality} · {p.age}y</span>
                 {isForeign(p, team.country) ? (
-                  <span className="badge foreign" style={{ marginLeft: 6 }}>FOR</span>
+                  <span className="badge foreign">FOR</span>
                 ) : p.homegrown ? (
-                  <span className="badge home" style={{ marginLeft: 6 }}>HG</span>
+                  <span className="badge home">HG</span>
                 ) : null}
               </div>
             </div>

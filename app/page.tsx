@@ -7,6 +7,8 @@ import { Standings } from "@/components/Standings";
 import { Roster } from "@/components/Roster";
 import { TacticsBoard } from "@/components/TacticsBoard";
 import { LiveMatch } from "@/components/LiveMatch";
+import { Crest } from "@/components/Crest";
+import { Icon, type IconName } from "@/components/Icon";
 
 type Tab = "home" | "roster" | "tactics" | "match";
 
@@ -17,8 +19,8 @@ export default function Page() {
   if (!game.ready) {
     return (
       <div className="app">
-        <div className="hero" style={{ marginTop: "30vh" }}>
-          <div className="ball">🏀</div>
+        <div className="hero" style={{ marginTop: "26vh" }}>
+          <div className="mark"><Icon name="ball" size={46} /></div>
           <h1>Courtside</h1>
         </div>
       </div>
@@ -30,7 +32,7 @@ export default function Page() {
     return (
       <div className="app">
         <div className="hero">
-          <div className="ball">🏀</div>
+          <div className="mark"><Icon name="ball" size={46} /></div>
           <h1>Courtside</h1>
           <p>International Basketball Manager. Pick a EuroLeague club and manage your season.</p>
         </div>
@@ -39,8 +41,13 @@ export default function Page() {
           <div className="picker-grid">
             {TEAM_CONFIGS.map((c) => (
               <button key={c.id} className="team-tile" onClick={() => game.chooseTeam(c.id)}>
-                <div className="nm">{c.name}</div>
-                <div className="ct">{c.country}</div>
+                <div className="tile-top">
+                  <Crest id={c.id} short={c.short} size={40} />
+                  <div>
+                    <div className="nm">{c.name}</div>
+                    <div className="ct">{c.country}</div>
+                  </div>
+                </div>
                 <div className="str">
                   <i style={{ width: `${(c.strength / 18) * 100}%` }} />
                 </div>
@@ -61,11 +68,13 @@ export default function Page() {
     <div className="app">
       <header className="header">
         <div className="header-row">
-          <div>
-            <h1>{config.name}</h1>
-            <div className="sub">{mdLabel}</div>
+          <div className="brand">
+            <Crest id={config.id} short={config.short} size={34} />
+            <div>
+              <h1>{config.name}</h1>
+              <div className="sub">{mdLabel}</div>
+            </div>
           </div>
-          <div className="ball" style={{ fontSize: 24 }}>🏀</div>
         </div>
       </header>
 
@@ -80,13 +89,13 @@ export default function Page() {
 
       <nav className="nav">
         {([
-          { k: "home", ic: "📊", l: "Table" },
-          { k: "roster", ic: "👥", l: "Squad" },
-          { k: "tactics", ic: "🎯", l: "Tactics" },
-          { k: "match", ic: "🏀", l: "Play" },
-        ] as { k: Tab; ic: string; l: string }[]).map((n) => (
+          { k: "home", ic: "table", l: "Table" },
+          { k: "roster", ic: "squad", l: "Squad" },
+          { k: "tactics", ic: "tactics", l: "Tactics" },
+          { k: "match", ic: "play", l: "Play" },
+        ] as { k: Tab; ic: IconName; l: string }[]).map((n) => (
           <button key={n.k} className={`nav-item ${tab === n.k ? "active" : ""}`} onClick={() => setTab(n.k)}>
-            <span className="ic">{n.ic}</span>
+            <span className="ic"><Icon name={n.ic} size={20} /></span>
             {n.l}
           </button>
         ))}
@@ -110,8 +119,8 @@ function MatchScreen({
     const champ = game.league.configs[table[0]!.teamId]!;
     return (
       <div className="screen">
-        <div className="hero" style={{ paddingTop: 16 }}>
-          <div className="ball">🏆</div>
+        <div className="hero" style={{ paddingTop: 28, borderRadius: "var(--radius)", marginBottom: 12 }}>
+          <div className="mark"><Icon name="trophy" size={44} /></div>
           <h1>{champ.name}</h1>
           <p>Champions</p>
         </div>

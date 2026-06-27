@@ -1,0 +1,11 @@
+Attribution notes for committed assets:
+
+Image assets are used for identification / editorial purposes within this
+non-commercial fan project.
+
+Club crests (public/assets/crests/*.png)
+  Source: Wikipedia / Wikimedia (each club's official basketball crest).
+  Trademarks are the property of their respective clubs.
+
+Arena photo (public/assets/img/arena.jpg)
+  "Capital One Arena interior 2017-04-19" via Wikimedia Commons.

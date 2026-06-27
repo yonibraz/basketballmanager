@@ -10,6 +10,7 @@ export const DISPLAYABLE = new Set<MatchEvent["type"]>([
   "steal",
   "block",
   "substitution",
+  "foul-out",
   "timeout",
   "period-end",
   "final",
@@ -36,6 +37,8 @@ export function describe(e: MatchEvent, name: string): { text: string; cls: stri
       return { text: `${name} blocks the shot`, cls: "" };
     case "substitution":
       return { text: `Substitution: ${name} ${e.detail ?? ""}`, cls: "bad" };
+    case "foul-out":
+      return { text: `${name} fouls out${e.detail ? ` (${e.detail})` : ""}`, cls: "bad" };
     case "timeout":
       return { text: "Timeout called", cls: "timeout" };
     case "period-end":
