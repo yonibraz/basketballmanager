@@ -11,8 +11,9 @@ fully-tested **engine core**:
 
 - **Play it:** pick a EuroLeague club, set your tactics (tempo, pressing, focus,
   rotation), and manage a 7-matchday season — watching each of your games unfold
-  as a live, animated play-by-play with a real box score. Progress is saved in
-  the browser.
+  in real time — calling timeouts, adjusting tactics, making substitutions and
+  setting defensive matchups possession-by-possession, with a live play-by-play
+  and box score. Progress is saved in the browser.
 - **Engine core:** a deterministic, framework-agnostic simulation + roster-quota
   library with no UI or database dependency. Runs anywhere TypeScript runs.
 
@@ -31,13 +32,13 @@ npm run build && npm run start   # production build
 | **Table** | League standings + the current matchday's fixtures. |
 | **Squad** | Your roster with overalls, nationality/homegrown flags, and a live league quota-compliance check. |
 | **Tactics** | Tempo, pressing intensity, star rotation, and offensive focus — fed straight into the engine. |
-| **Play** | Animated match-day viewer: scoreboard, play-by-play feed (with speed/skip), and final box score. |
+| **Play** | Interactive live match: coach against the opponent in real time — timeout, in-game tactics, manual subs, defensive matchups, momentum, and a play-by-play feed (pause/speed/skip), then the final box score. |
 
 ## What's here
 
 | Area | File | Notes |
 | --- | --- | --- |
-| App UI | `app/`, `components/`, `lib/` | Next.js mobile-first manager game; season loop, tactics, animated match viewer. Browser-saved progress. |
+| App UI | `app/`, `components/`, `lib/` | Next.js mobile-first manager game; season loop, tactics, interactive live match, monochrome FM skin with real crests. Browser-saved progress. |
 | Match engine | `src/engine/MatchEngine.ts` | Possession-by-possession Markov simulation on a 24s shot clock. Outputs a box score + compressed event stream. Fully deterministic. |
 | Probability model | `src/engine/probability.ts` | Logistic offense-vs-defense matchup model, fatigue and clutch modifiers. |
 | Roster quotas | `src/rosters/quotas.ts` | Declarative "foreigner rules" per league (ACB homegrown minimum, Israeli foreign cap, EuroLeague, generic). |
@@ -51,7 +52,7 @@ npm run build && npm run start   # production build
 
 ```bash
 npm install
-npm test          # 31 unit tests (engine determinism, box-score integrity, FIBA foul rules, quotas)
+npm test          # 37 unit tests (engine determinism, box-score integrity, FIBA foul rules, live-match driver, quotas)
 npm run typecheck # strict TypeScript, no emit
 npm run demo      # simulate one match + roster checks, printed to stdout
 ```
