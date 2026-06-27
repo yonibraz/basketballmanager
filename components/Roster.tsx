@@ -71,7 +71,8 @@ export function Roster({ team, config }: { team: Team; config: TeamConfig }) {
                 ) : null}
               </div>
             </div>
-            <div className="ovr">
+            <span className="badge active" style={{ marginLeft: "auto" }}>Active</span>
+            <div className="ovr" style={{ marginLeft: 16 }}>
               {overall(p)}
               <small>OVR</small>
             </div>

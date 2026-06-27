@@ -19,7 +19,10 @@ export type IconName =
   | "check"
   | "x"
   | "chevronRight"
-  | "ball";
+  | "ball"
+  | "dashboard"
+  | "calendar"
+  | "settings";
 
 // Stroked icons (fill:none, stroke:currentColor).
 const STROKE: Partial<Record<IconName, ReactNode>> = {
@@ -36,6 +39,26 @@ const STROKE: Partial<Record<IconName, ReactNode>> = {
       <circle cx="9" cy="7" r="4" />
       <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
       <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </>
+  ),
+  dashboard: (
+    <>
+      <rect x="3" y="3" width="7" height="9" rx="1" />
+      <rect x="14" y="3" width="7" height="5" rx="1" />
+      <rect x="14" y="12" width="7" height="9" rx="1" />
+      <rect x="3" y="16" width="7" height="5" rx="1" />
+    </>
+  ),
+  calendar: (
+    <>
+      <rect x="3" y="4" width="18" height="17" rx="2" />
+      <path d="M3 9h18M8 2v4M16 2v4" />
+    </>
+  ),
+  settings: (
+    <>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 2.5l1.4 2.4 2.7-.5.6 2.7 2.4 1.4-1.1 2.5 1.1 2.5-2.4 1.4-.6 2.7-2.7-.5L12 21.5l-1.4-2.4-2.7.5-.6-2.7L4.9 15.5 6 13 4.9 10.5l2.4-1.4.6-2.7 2.7.5z" />
     </>
   ),
   tactics: (
