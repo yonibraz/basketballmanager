@@ -6,10 +6,14 @@ import { Rng } from "@/src/rng";
 import {
   type Fixture,
   type League,
+  type PlayoffBracket,
+  type PlayoffGame,
   TOTAL_MATCHDAYS,
   fixturesForMatchday,
+  generatePlayoff,
   makeLeague,
   recordResult,
+  resolvePlayoffSemis,
   simulateFixture,
 } from "./league";
 import { developPlayers } from "./playerDev";
@@ -25,6 +29,12 @@ interface SavedResult {
   awayScore: number;
 }
 
+interface PlayoffState {
+  bracket: PlayoffBracket | null;
+  phase: "none" | "semis" | "final" | "done";
+  currentGame: 0 | 1 | 2;
+}
+
 interface SaveData {
   v: 2;
   seasonSeed: number;
@@ -34,6 +44,7 @@ interface SaveData {
   tactics: Tactics;
   currentMatchday: number;
   results: SavedResult[];
+  playoff?: PlayoffState;
 }
 
 export interface Game {
@@ -44,10 +55,13 @@ export interface Game {
   currentMatchday: number;
   seasonOver: boolean;
   userFixture: Fixture | null;
+  playoff: PlayoffState;
+  playoffFixture: PlayoffGame | null;
   chooseTeam: (id: string) => void;
   setTactics: (t: Tactics) => void;
   /** Record the user's (already simulated) result, then sim the rest + advance. */
   completeMatchday: (userFixture: Fixture, homeScore: number, awayScore: number) => void;
+  completePlayoffGame: (homeScore: number, awayScore: number) => void;
   newSeason: () => void;
 }
 
@@ -83,6 +97,8 @@ function rebuild(save: SaveData): League {
   return league;
 }
 
+const DEFAULT_PLAYOFF: PlayoffState = { bracket: null, phase: "none", currentGame: 0 };
+
 export function useGame(): Game {
   const [ready, setReady] = useState(false);
   const seedRef = useRef(DEFAULT_SEED);
@@ -91,6 +107,7 @@ export function useGame(): Game {
   const [userTeamId, setUserTeamId] = useState<string | null>(null);
   const [tactics, setTacticsState] = useState<Tactics>(DEFAULT_TACTICS);
   const [currentMatchday, setCurrentMatchday] = useState(1);
+  const [playoff, setPlayoff] = useState<PlayoffState>(DEFAULT_PLAYOFF);
 
   // Load any saved game on mount (client only).
   useEffect(() => {
@@ -105,6 +122,7 @@ export function useGame(): Game {
           setUserTeamId(save.userTeamId);
           setTacticsState(save.tactics ?? DEFAULT_TACTICS);
           setCurrentMatchday(save.currentMatchday ?? 1);
+          if (save.playoff) setPlayoff(save.playoff);
         }
       }
     } catch {
@@ -114,7 +132,7 @@ export function useGame(): Game {
   }, []);
 
   const persist = useCallback(
-    (next: Partial<{ userTeamId: string | null; tactics: Tactics; currentMatchday: number; league: League; developmentPasses: number }>) => {
+    (next: Partial<{ userTeamId: string | null; tactics: Tactics; currentMatchday: number; league: League; developmentPasses: number; playoff: PlayoffState }>) => {
       const lg = next.league ?? league;
       const save: SaveData = {
         v: 2,
@@ -132,6 +150,7 @@ export function useGame(): Game {
             homeScore: f.homeScore ?? 0,
             awayScore: f.awayScore ?? 0,
           })),
+        playoff: next.playoff ?? playoff,
       };
       try {
         localStorage.setItem(SAVE_KEY, JSON.stringify(save));
@@ -139,7 +158,7 @@ export function useGame(): Game {
         /* storage may be unavailable */
       }
     },
-    [league, userTeamId, tactics, currentMatchday],
+    [league, userTeamId, tactics, currentMatchday, playoff],
   );
 
   const chooseTeam = useCallback(
@@ -173,9 +192,64 @@ export function useGame(): Game {
       const cloned = { ...league };
       setLeague(cloned);
       setCurrentMatchday(nextMatchday);
-      persist({ currentMatchday: nextMatchday, league: cloned });
+
+      // Auto-generate playoff bracket when regular season ends.
+      let nextPlayoff = playoff;
+      if (nextMatchday > TOTAL_MATCHDAYS && playoff.phase === "none") {
+        const bracket = generatePlayoff(cloned);
+        nextPlayoff = { bracket, phase: "semis", currentGame: 0 };
+        setPlayoff(nextPlayoff);
+      }
+
+      persist({ currentMatchday: nextMatchday, league: cloned, playoff: nextPlayoff });
     },
-    [league, userTeamId, tactics, currentMatchday, persist],
+    [league, userTeamId, tactics, currentMatchday, playoff, persist],
+  );
+
+  const completePlayoffGame = useCallback(
+    (homeScore: number, awayScore: number) => {
+      if (!userTeamId || !playoff.bracket) return;
+      const { currentGame } = playoff;
+
+      // Deep-clone the bracket so we never mutate React state in place.
+      const bracket: PlayoffBracket = JSON.parse(JSON.stringify(playoff.bracket)) as PlayoffBracket;
+
+      if (playoff.phase === "semis") {
+        // Guard: currentGame must be 0 or 1 when in semis.
+        if (currentGame !== 0 && currentGame !== 1) return;
+        const semiIdx = currentGame;
+        const semi = bracket.semis[semiIdx];
+        semi.played = true;
+        semi.homeScore = homeScore;
+        semi.awayScore = awayScore;
+        // homeScore === awayScore should not occur (engine guarantees a winner via OT),
+        // but default to home team (higher seed) if it somehow does.
+        semi.winnerId = homeScore >= awayScore ? semi.homeId : semi.awayId;
+
+        let nextPlayoff: PlayoffState;
+        if (semiIdx === 0) {
+          // Semi 1 done, move to semi 2
+          nextPlayoff = { bracket, phase: "semis", currentGame: 1 };
+        } else {
+          // Both semis done — wire up the final
+          resolvePlayoffSemis(bracket);
+          nextPlayoff = { bracket, phase: "final", currentGame: 2 };
+        }
+        setPlayoff(nextPlayoff);
+        persist({ playoff: nextPlayoff });
+      } else if (playoff.phase === "final") {
+        const final = bracket.final;
+        final.played = true;
+        final.homeScore = homeScore;
+        final.awayScore = awayScore;
+        // Default to home team (higher seed) on an impossible tie.
+        final.winnerId = homeScore >= awayScore ? final.homeId : final.awayId;
+        const nextPlayoff: PlayoffState = { bracket, phase: "done", currentGame: 2 };
+        setPlayoff(nextPlayoff);
+        persist({ playoff: nextPlayoff });
+      }
+    },
+    [userTeamId, playoff, persist],
   );
 
   const newSeason = useCallback(() => {
@@ -187,8 +261,22 @@ export function useGame(): Game {
     applyDevelopmentPasses(lg, nextPasses);
     setLeague(lg);
     setCurrentMatchday(1);
-    persist({ currentMatchday: 1, league: lg, developmentPasses: nextPasses });
+    const resetPlayoff = DEFAULT_PLAYOFF;
+    setPlayoff(resetPlayoff);
+    persist({ currentMatchday: 1, league: lg, developmentPasses: nextPasses, playoff: resetPlayoff });
   }, [persist]);
+
+  // The current active playoff game (null when not in playoffs or done).
+  function getPlayoffFixture(): PlayoffGame | null {
+    if (!playoff.bracket) return null;
+    if (playoff.phase === "semis") {
+      // Bounds-guard: only return a semi if currentGame is a valid index (0 or 1).
+      if (playoff.currentGame !== 0 && playoff.currentGame !== 1) return null;
+      return playoff.bracket.semis[playoff.currentGame];
+    }
+    if (playoff.phase === "final") return playoff.bracket.final;
+    return null;
+  }
 
   return {
     ready,
@@ -196,11 +284,14 @@ export function useGame(): Game {
     userTeamId,
     tactics,
     currentMatchday,
-    seasonOver: currentMatchday > TOTAL_MATCHDAYS,
+    seasonOver: playoff.phase === "done",
     userFixture: findUserFixture(league, currentMatchday, userTeamId),
+    playoff,
+    playoffFixture: getPlayoffFixture(),
     chooseTeam,
     setTactics,
     completeMatchday,
+    completePlayoffGame,
     newSeason,
   };
 }

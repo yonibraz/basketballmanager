@@ -7,6 +7,8 @@ interface Props {
   userTeamId: string;
   userPosition: number;
   totalTeams: number;
+  /** Playoff bracket winner, when the season ran a postseason. Distinct from the regular-season champion. */
+  playoffChampion?: { name: string; isUser: boolean };
   onNewSeason: () => void;
 }
 
@@ -49,7 +51,7 @@ function AwardRow({ icon, label, teamName, stat, isUser }: AwardRowProps) {
   );
 }
 
-export function SeasonAwards({ awards, userTeamId, userPosition, totalTeams, onNewSeason }: Props) {
+export function SeasonAwards({ awards, userTeamId, userPosition, totalTeams, playoffChampion, onNewSeason }: Props) {
   const isChamp = awards.champion.teamId === userTeamId;
   const isOffense = awards.bestOffense.teamId === userTeamId;
   const isDefense = awards.bestDefense.teamId === userTeamId;
@@ -63,15 +65,24 @@ export function SeasonAwards({ awards, userTeamId, userPosition, totalTeams, onN
         <div className="mark">
           <span style={{ fontSize: 40 }}>🏆</span>
         </div>
-        <h1>{awards.champion.name} Champions!</h1>
-        <p>Season awards ceremony</p>
+        <h1>{(playoffChampion?.name ?? awards.champion.name)} Champions!</h1>
+        <p>{playoffChampion ? "Playoff champions" : "Season awards ceremony"}</p>
       </div>
 
       <h2>Season Awards</h2>
       <div className="card" style={{ padding: "4px 18px 14px" }}>
+        {playoffChampion && (
+          <AwardRow
+            icon="👑"
+            label="Playoff Champion"
+            teamName={playoffChampion.name}
+            stat=""
+            isUser={playoffChampion.isUser}
+          />
+        )}
         <AwardRow
           icon="🏆"
-          label="Champions"
+          label={playoffChampion ? "Regular Season" : "Champions"}
           teamName={awards.champion.name}
           stat={`${awards.champion.wins}–${awards.champion.losses}`}
           isUser={isChamp}

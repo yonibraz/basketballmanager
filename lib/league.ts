@@ -197,3 +197,74 @@ export function sortedStandings(league: League): Standing[] {
     return y.pointsFor - x.pointsFor;
   });
 }
+
+// ---------------------------------------------------------------------------
+// Playoff bracket
+// ---------------------------------------------------------------------------
+
+export interface PlayoffGame {
+  homeId: string;  // higher seed is home
+  awayId: string;
+  played: boolean;
+  homeScore?: number;
+  awayScore?: number;
+  winnerId?: string;
+}
+
+export interface PlayoffBracket {
+  semis: [PlayoffGame, PlayoffGame]; // [seed1v4, seed2v3]
+  final: PlayoffGame;
+}
+
+/** Build a top-4 single-elimination bracket from the current standings. */
+export function generatePlayoff(league: League): PlayoffBracket {
+  const top4 = sortedStandings(league).slice(0, 4);
+  const [s1, s2, s3, s4] = top4.map((s) => s.teamId) as [string, string, string, string];
+  return {
+    semis: [
+      { homeId: s1, awayId: s4, played: false },
+      { homeId: s2, awayId: s3, played: false },
+    ],
+    final: { homeId: "", awayId: "", played: false },
+  };
+}
+
+/**
+ * Deterministic simulation of a playoff game.
+ * Seed matches the live path: LiveMatch uses fixtureSeed with matchday 99 for
+ * all playoff games, so we use the same formula here for consistency.
+ */
+export function simulatePlayoffGame(
+  league: League,
+  game: PlayoffGame,
+  userTeamId: string,
+  userTactics: Tactics,
+): MatchResult {
+  const home = teamById(league, game.homeId);
+  const away = teamById(league, game.awayId);
+  const homeTactics = game.homeId === userTeamId ? userTactics : aiTactics(league.configs[game.homeId]!.strength);
+  const awayTactics = game.awayId === userTeamId ? userTactics : aiTactics(league.configs[game.awayId]!.strength);
+  // Use matchday 99 to align with the adaptedFixture used in LiveMatch.
+  const seed = seedFromString(`${league.seasonSeed}:99:${game.homeId}:${game.awayId}`);
+  return MatchEngine.simulate({
+    home,
+    away,
+    homeTactics,
+    awayTactics,
+    seed,
+    recordEvents: game.homeId === userTeamId || game.awayId === userTeamId,
+  });
+}
+
+/**
+ * After both semis have winners, wire them into the final.
+ * Mutates bracket.final.
+ */
+export function resolvePlayoffSemis(bracket: PlayoffBracket): void {
+  const semi1Winner = bracket.semis[0].winnerId;
+  const semi2Winner = bracket.semis[1].winnerId;
+  if (semi1Winner && semi2Winner) {
+    bracket.final.homeId = semi1Winner;
+    bracket.final.awayId = semi2Winner;
+  }
+}
