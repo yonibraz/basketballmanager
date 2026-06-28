@@ -130,7 +130,7 @@ export default function Page() {
             onNav={(t) => setTab(t as Tab)}
           />
         )}
-        {tab === "roster" && <Roster team={team} config={config} />}
+        {tab === "roster" && <Roster team={team} config={config} injuredPlayers={game.injuredPlayers} />}
         {tab === "schedule" && (
           <Standings
             league={game.league}

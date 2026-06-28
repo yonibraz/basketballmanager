@@ -67,6 +67,11 @@ export interface Player {
    * still be homegrown under most European rules).
    */
   homegrown?: boolean;
+  /**
+   * Remaining matchdays the player is unavailable due to injury.
+   * 0 or undefined = healthy; >0 = injured and out for that many matchdays.
+   */
+  injuryWeeksLeft?: number;
 }
 
 /** A team's full registered roster plus identity used for quota checks. */

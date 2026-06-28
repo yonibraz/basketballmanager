@@ -15,7 +15,9 @@ import {
   recordResult,
   resolvePlayoffSemis,
   simulateFixture,
+  teamById,
 } from "./league";
+import { rollInjuries, recoverPlayers } from "@/src/engine/injuries";
 import { type FreeAgent, generateFreeAgents } from "./market";
 import { developPlayers } from "./playerDev";
 
@@ -67,6 +69,8 @@ interface SaveData {
   tactics: Tactics;
   currentMatchday: number;
   results: SavedResult[];
+  /** Persisted injury state for the user's squad. */
+  playerInjuries?: Record<string, number>;
   budget?: number;
   freeAgents?: FreeAgent[];
   /** Persisted user-team roster (captures signed/released changes). */
@@ -83,6 +87,8 @@ export interface Game {
   currentMatchday: number;
   seasonOver: boolean;
   userFixture: Fixture | null;
+  /** Players currently out with injury. */
+  injuredPlayers: Player[];
   budget: number;
   freeAgents: FreeAgent[];
   seasonStats: Record<string, AccumulatedStats>;
@@ -160,6 +166,22 @@ function findUserFixture(league: League, matchday: number, userTeamId: string | 
   );
 }
 
+/** Apply a persisted injury map back onto a league's team players. */
+function applyInjuryMap(league: League, userTeamId: string, injuryMap: Record<string, number>): League {
+  const teams = league.teams.map((t) => {
+    if (t.id !== userTeamId) return t;
+    const players = t.players.map((p) => {
+      const weeks = injuryMap[p.id];
+      if (weeks !== undefined && weeks > 0) return { ...p, injuryWeeksLeft: weeks };
+      // Clear any previously set injury if not in the map.
+      if (p.injuryWeeksLeft) return { ...p, injuryWeeksLeft: 0 };
+      return p;
+    });
+    return { ...t, players };
+  });
+  return { ...league, teams };
+}
+
 /**
  * Apply N deterministic development passes to a freshly-built league.
  * Each pass uses a seed derived from the season seed XOR a pass-specific constant,
@@ -190,6 +212,10 @@ function rebuild(save: SaveData): League {
         i === idx ? { ...t, players: save.userTeamPlayers! } : t,
       );
     }
+  }
+  // Re-apply persisted injuries onto the (possibly modified) roster.
+  if (save.userTeamId && save.playerInjuries) {
+    return applyInjuryMap(league, save.userTeamId, save.playerInjuries);
   }
   return league;
 }
@@ -260,6 +286,21 @@ export function useGame(): Game {
       const userTeamPlayers = resolvedTeamId
         ? lg.teams.find((t) => t.id === resolvedTeamId)?.players
         : undefined;
+      // Build a map of player injury state for the user's team.
+      let playerInjuries: Record<string, number> | undefined;
+      if (resolvedTeamId) {
+        try {
+          const userTeam = teamById(lg, resolvedTeamId);
+          playerInjuries = {};
+          for (const p of userTeam.players) {
+            if (p.injuryWeeksLeft && p.injuryWeeksLeft > 0) {
+              playerInjuries[p.id] = p.injuryWeeksLeft;
+            }
+          }
+        } catch {
+          /* team may not exist yet */
+        }
+      }
       const save: SaveData = {
         v: 2,
         seasonSeed: seedRef.current,
@@ -279,6 +320,7 @@ export function useGame(): Game {
             homeScore: f.homeScore ?? 0,
             awayScore: f.awayScore ?? 0,
           })),
+        playerInjuries,
         seasonStats: next.seasonStats !== undefined ? next.seasonStats : seasonStats,
         playoff: next.playoff ?? playoff,
       };
@@ -329,8 +371,32 @@ export function useGame(): Game {
         nextStats = mergeBoxScore(nextStats, f.awayId, res.away.players);
       }
 
+      // Per-player seconds for the user's team, taken from the live result, for injury rolls.
+      const userSide = userFixture.homeId === userTeamId ? userResult.home : userResult.away;
+      const userSecondsPlayed: Record<string, number> = {};
+      for (const p of userSide.players) userSecondsPlayed[p.playerId] = p.secondsPlayed;
+
+      // --- Injury rolling: deterministic per matchday + season seed ---
+      const injuryRng = new Rng((currentMatchday * 0xbeef + league.seasonSeed) >>> 0);
+      const userTeamIndex = league.teams.findIndex((t) => t.id === userTeamId);
+      let updatedTeams = [...league.teams];
+
+      if (userTeamIndex !== -1) {
+        const userTeam = updatedTeams[userTeamIndex]!;
+        // Step 1: Recover existing injuries by 1 matchday (the new matchday has begun).
+        // This must run BEFORE rollInjuries so that a newly-set 1-week injury is NOT
+        // immediately decremented — the player must sit out the full next matchday.
+        const recoveredPlayers = recoverPlayers(userTeam.players);
+        // Step 2: Roll new injuries from this matchday's game on the recovered roster.
+        // Only roll against healthy players (injuryWeeksLeft = 0/undefined after recovery).
+        const playersAfterInjuryRoll = rollInjuries(recoveredPlayers, userSecondsPlayed, injuryRng);
+        updatedTeams = updatedTeams.map((t, i) =>
+          i === userTeamIndex ? { ...t, players: playersAfterInjuryRoll } : t,
+        );
+      }
+
       const nextMatchday = currentMatchday + 1;
-      const cloned = { ...league };
+      const cloned: League = { ...league, teams: updatedTeams };
       setLeague(cloned);
       setCurrentMatchday(nextMatchday);
       setSeasonStats(nextStats);
@@ -413,6 +479,17 @@ export function useGame(): Game {
     persist({ currentMatchday: 1, league: lg, developmentPasses: nextPasses, budget: DEFAULT_BUDGET, freeAgents: freshAgents, seasonStats: emptyStats, playoff: resetPlayoff });
   }, [persist]);
 
+  // Compute injuredPlayers convenience list.
+  let injuredPlayers: Player[] = [];
+  if (userTeamId) {
+    try {
+      const userTeam = teamById(league, userTeamId);
+      injuredPlayers = userTeam.players.filter((p) => (p.injuryWeeksLeft ?? 0) > 0);
+    } catch {
+      /* team may not be found */
+    }
+  }
+
   const signPlayer = useCallback(
     (fa: FreeAgent): string | null => {
       if (!userTeamId) return "No team selected";
@@ -487,6 +564,7 @@ export function useGame(): Game {
     currentMatchday,
     seasonOver: playoff.phase === "done",
     userFixture: findUserFixture(league, currentMatchday, userTeamId),
+    injuredPlayers,
     budget,
     freeAgents,
     seasonStats,
