@@ -1,12 +1,29 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, type CSSProperties } from "react";
 import type { Player, Team } from "@/src/types";
 import { LEAGUE_QUOTAS } from "@/src/rosters/quotas";
 import { validateRoster } from "@/src/rosters/validation";
 import type { TeamConfig } from "@/lib/league";
 import { isForeign, overall } from "@/lib/ratings";
 import { Icon } from "@/components/Icon";
+
+function AttrBar({ value, color }: { value: number; color: string }) {
+  const pct = ((value - 1) / 19) * 100;
+  return (
+    <div style={{ height: 3, borderRadius: 2, background: "var(--line)", overflow: "hidden", flex: 1 }}>
+      <div
+        style={{
+          height: "100%",
+          width: `${pct}%`,
+          background: color,
+          borderRadius: 2,
+          transition: "width 0.6s cubic-bezier(0.16, 1, 0.3, 1)",
+        }}
+      />
+    </div>
+  );
+}
 
 export function Roster({
   team,
@@ -71,12 +88,12 @@ export function Roster({
       )}
 
       <div className="plist">
-        {players.map((p) => {
+        {players.map((p, i) => {
           const injured = (p.injuryWeeksLeft ?? 0) > 0;
           return (
-            <div key={p.id} className="prow">
+            <div key={p.id} className="prow" style={{ "--i": i } as CSSProperties}>
               <div className="pavatar">{`${p.firstName[0] ?? ""}${p.lastName[0] ?? ""}`}</div>
-              <div style={{ minWidth: 0 }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
                 <div className="pname" style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   {p.firstName} {p.lastName}
                   {injured && (
@@ -93,6 +110,11 @@ export function Roster({
                   ) : p.homegrown ? (
                     <span className="badge home">HG</span>
                   ) : null}
+                </div>
+                <div style={{ display: "flex", gap: 3, marginTop: 4 }}>
+                  <AttrBar value={(p.attributes.shootingOutside + p.attributes.shootingInside) / 2} color="var(--accent)" />
+                  <AttrBar value={(p.attributes.defPerimeter + p.attributes.defInterior) / 2} color="var(--green)" />
+                  <AttrBar value={(p.attributes.strength + p.attributes.pace) / 2} color="var(--primary)" />
                 </div>
               </div>
               {injured ? (
