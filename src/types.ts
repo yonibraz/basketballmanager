@@ -81,6 +81,8 @@ export interface Team {
   /** ISO-3166 alpha-3 code of the team's home country. */
   country: string;
   players: Player[];
+  /** Transfer budget in millions (e.g. 50 = £50M). Optional for backwards compatibility. */
+  budget?: number;
 }
 
 /** Offensive emphasis applied when distributing shot selection. */
