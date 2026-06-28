@@ -8,6 +8,23 @@ import type { TeamConfig } from "@/lib/league";
 import { isForeign, overall } from "@/lib/ratings";
 import { Icon } from "@/components/Icon";
 
+function AttrBar({ value, color }: { value: number; color: string }) {
+  const pct = ((value - 1) / 19) * 100;
+  return (
+    <div style={{ height: 3, borderRadius: 2, background: "var(--line)", overflow: "hidden", flex: 1 }}>
+      <div
+        style={{
+          height: "100%",
+          width: `${pct}%`,
+          background: color,
+          borderRadius: 2,
+          transition: "width 0.6s cubic-bezier(0.16, 1, 0.3, 1)",
+        }}
+      />
+    </div>
+  );
+}
+
 export function Roster({ team, config }: { team: Team; config: TeamConfig }) {
   const rule = LEAGUE_QUOTAS[config.quotaRuleId] ?? LEAGUE_QUOTAS.GEN_DOMESTIC!;
   const report = useMemo(
@@ -54,10 +71,10 @@ export function Roster({ team, config }: { team: Team; config: TeamConfig }) {
       </div>
 
       <div className="plist">
-        {players.map((p) => (
-          <div key={p.id} className="prow">
+        {players.map((p, i) => (
+          <div key={p.id} className="prow" style={{ "--i": i } as React.CSSProperties}>
             <div className="pavatar">{`${p.firstName[0] ?? ""}${p.lastName[0] ?? ""}`}</div>
-            <div style={{ minWidth: 0 }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
               <div className="pname">
                 {p.firstName} {p.lastName}
               </div>
@@ -69,6 +86,11 @@ export function Roster({ team, config }: { team: Team; config: TeamConfig }) {
                 ) : p.homegrown ? (
                   <span className="badge home">HG</span>
                 ) : null}
+              </div>
+              <div style={{ display: "flex", gap: 3, marginTop: 4 }}>
+                <AttrBar value={(p.attributes.shootingOutside + p.attributes.shootingInside) / 2} color="var(--accent)" />
+                <AttrBar value={(p.attributes.defPerimeter + p.attributes.defInterior) / 2} color="var(--green)" />
+                <AttrBar value={(p.attributes.strength + p.attributes.pace) / 2} color="var(--primary)" />
               </div>
             </div>
             <span className="badge active" style={{ marginLeft: "auto" }}>Active</span>

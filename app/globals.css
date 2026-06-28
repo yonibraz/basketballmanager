@@ -283,12 +283,69 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border-radius
 .boxhead > strong:last-child { font-family: var(--font-data); font-weight: 500; font-size: 17px; }
 
 .feed { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; max-height: 360px; overflow: hidden; }
-.ev { display: flex; gap: 10px; align-items: baseline; font-size: 13px; padding: 9px 12px; border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--line); box-shadow: var(--shadow); animation: pop 0.22s ease; }
+.ev { display: flex; gap: 10px; align-items: baseline; font-size: 13px; padding: 9px 12px; border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--line); box-shadow: var(--shadow); animation: pop 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .ev .t { color: var(--faint); font-family: var(--font-data); font-size: 11px; font-variant-numeric: tabular-nums; min-width: 58px; }
-.ev.score { border-left-color: var(--primary); }
+.ev.score { border-color: rgba(0,86,210,0.3); border-left-color: var(--primary); animation: pop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); background: rgba(0,86,210,0.04); }
 .ev.bad { color: var(--muted); }
 .ev.timeout { border-left-color: var(--accent); color: var(--text); font-weight: 600; background: var(--primary-tint); }
 @keyframes pop { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
+/* ===========================================================================
+   Animations & micro-interactions
+   ========================================================================== */
+
+/* Smooth slide-in from bottom for cards/screens */
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Score flash on a scoring event */
+@keyframes score-flash {
+  0%   { color: var(--text); }
+  40%  { color: var(--primary); transform: scale(1.12); }
+  100% { color: var(--text); transform: scale(1); }
+}
+
+/* Pulse ring for active/highlighted elements */
+@keyframes pulse-ring {
+  0%   { box-shadow: 0 0 0 0 rgba(0,86,210,0.4); }
+  70%  { box-shadow: 0 0 0 8px rgba(0,86,210,0); }
+  100% { box-shadow: 0 0 0 0 rgba(0,86,210,0); }
+}
+
+/* Stagger entrance for list items */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Shimmer loading skeleton */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Utility animation classes */
+.animate-slide-up { animation: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+.animate-fade-in  { animation: fade-in 0.25s ease; }
+
+/* Score flashes on point scored */
+.sc.scored { animation: score-flash 0.5s ease; }
+
+/* Player row stagger (set --i as a CSS var on each row via style).
+   Scoped to .plist so Dashboard .prow elements aren't affected. */
+.plist .prow { animation: fade-in 0.25s ease both; animation-delay: calc(var(--i, 0) * 40ms); }
+
+/* Navigation active indicator */
+.nav-item { position: relative; transition: color 0.15s ease; }
+.nav-item.active::after { content: ''; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); width: 24px; height: 3px; border-radius: 2px; background: var(--accent); animation: fade-in 0.15s ease; }
+
+/* Sidebar active item left bar */
+.side-item { transition: color 0.12s ease, background 0.12s ease; position: relative; }
+.side-item.active::before { content: ''; position: absolute; left: 0; top: 20%; height: 60%; width: 3px; border-radius: 0 2px 2px 0; background: var(--primary); }
+
+/* Team tile hover rules are consolidated in the Team picker section below */
 
 /* Live coaching: momentum bar */
 .momentum { position: relative; height: 8px; margin-top: 10px; border-radius: 999px; background: var(--bg-elev); border: 1px solid var(--line); overflow: hidden; }
@@ -326,8 +383,8 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border-radius
 .app { max-width: 720px; margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; background: var(--bg); }
 .app > .screen { padding-bottom: 40px; }
 .picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
-.team-tile { text-align: left; padding: 16px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface); box-shadow: var(--shadow); cursor: pointer; transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.06s ease; }
-.team-tile:hover { border-color: var(--primary); box-shadow: var(--shadow-md); }
+.team-tile { text-align: left; padding: 16px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface); box-shadow: var(--shadow); cursor: pointer; transition: transform 0.12s ease, border-color 0.15s ease, box-shadow 0.15s ease; }
+.team-tile:hover { border-color: var(--primary); box-shadow: var(--shadow-md), 0 0 0 1px rgba(0,86,210,0.15); transform: translateY(-2px); }
 .team-tile:active { transform: scale(0.98); }
 .team-tile .tile-top { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .team-tile .nm { font-weight: 700; font-size: 15px; line-height: 1.15; }
