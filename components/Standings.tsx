@@ -1,16 +1,18 @@
 "use client";
 
-import { type League, TOTAL_MATCHDAYS, fixturesForMatchday, sortedStandings } from "@/lib/league";
+import { type League, type PlayoffBracket, TOTAL_MATCHDAYS, fixturesForMatchday, sortedStandings } from "@/lib/league";
 import { Crest } from "@/components/Crest";
 
 export function Standings({
   league,
   userTeamId,
   currentMatchday,
+  playoff,
 }: {
   league: League;
   userTeamId: string;
   currentMatchday: number;
+  playoff?: { bracket: PlayoffBracket | null; phase: string };
 }) {
   const table = sortedStandings(league);
   const md = Math.min(currentMatchday, TOTAL_MATCHDAYS);
@@ -81,6 +83,89 @@ export function Standings({
           );
         })}
       </div>
+
+      {playoff?.bracket && (
+        <>
+          <h2>Playoffs</h2>
+          <div className="card tight">
+            {playoff.bracket.semis.map((semi, idx) => {
+              const home = league.configs[semi.homeId];
+              const away = league.configs[semi.awayId];
+              if (!home || !away) return null;
+              const mine = semi.homeId === userTeamId || semi.awayId === userTeamId;
+              const winner = semi.winnerId ? league.configs[semi.winnerId] : null;
+              return (
+                <div
+                  key={`semi-${idx}`}
+                  className="fixture"
+                  style={{ fontWeight: mine ? 700 : 500, color: mine ? "#fff" : undefined }}
+                >
+                  <span className="fx-team fx-home">
+                    <span className="fx-nm">{home.short}</span>
+                    <Crest id={home.id} short={home.short} size={20} />
+                  </span>
+                  <span className="fx-score">
+                    {semi.played
+                      ? `${semi.homeScore}–${semi.awayScore}`
+                      : "SF"}
+                  </span>
+                  <span className="fx-team fx-away">
+                    <Crest id={away.id} short={away.short} size={20} />
+                    <span className="fx-nm">{away.short}</span>
+                  </span>
+                  {winner && (
+                    <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>
+                      → {winner.short}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Final */}
+            {(() => {
+              const f = playoff.bracket.final;
+              if (!f.homeId || !f.awayId) {
+                return (
+                  <div className="fixture">
+                    <span className="muted" style={{ flex: 1, textAlign: "center", fontSize: 13 }}>
+                      Final — TBD
+                    </span>
+                  </div>
+                );
+              }
+              const home = league.configs[f.homeId];
+              const away = league.configs[f.awayId];
+              if (!home || !away) return null;
+              const mine = f.homeId === userTeamId || f.awayId === userTeamId;
+              const winner = f.winnerId ? league.configs[f.winnerId] : null;
+              return (
+                <div
+                  className="fixture"
+                  style={{ fontWeight: mine ? 700 : 500, color: mine ? "#fff" : undefined }}
+                >
+                  <span className="fx-team fx-home">
+                    <span className="fx-nm">{home.short}</span>
+                    <Crest id={home.id} short={home.short} size={20} />
+                  </span>
+                  <span className="fx-score">
+                    {f.played ? `${f.homeScore}–${f.awayScore}` : "F"}
+                  </span>
+                  <span className="fx-team fx-away">
+                    <Crest id={away.id} short={away.short} size={20} />
+                    <span className="fx-nm">{away.short}</span>
+                  </span>
+                  {winner && (
+                    <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>
+                      🏆 {winner.short}
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        </>
+      )}
     </div>
   );
 }
