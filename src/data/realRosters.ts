@@ -25,10 +25,10 @@ export const REAL_ROSTERS: Record<string, RosterEntry[]> = {
     { firstName: "Gabriel",   lastName: "Deck",                   nationality: "ARG", position: "SF" },
     { firstName: "Guerschon", lastName: "Yabusele",               nationality: "FRA", position: "PF" },
     { firstName: "Tristan",   lastName: "Vukcevic",               nationality: "SRB", position: "PF" },
-    { firstName: "Walter",    lastName: "Tavares",                nationality: "CPV", position: "C"  },
+    { firstName: "Edy",       lastName: "Tavares",                nationality: "CPV", position: "C"  },
     { firstName: "Carlos",    lastName: "Alocen",                 nationality: "ESP", position: "PG" },
     { firstName: "Alberto",   lastName: "de la Cruz",             nationality: "ESP", position: "SG" },
-    { firstName: "Edy",       lastName: "Tavares",                nationality: "CPV", position: "C"  },
+    { firstName: "Vincent",   lastName: "Poirier",                nationality: "FRA", position: "C"  },
   ],
   FCB: [
     // FC Barcelona
@@ -84,7 +84,7 @@ export const REAL_ROSTERS: Record<string, RosterEntry[]> = {
     { firstName: "Marius",     lastName: "Grigonis",              nationality: "LTU", position: "SF" },
     { firstName: "Ioannis",    lastName: "Papapetrou",            nationality: "GRC", position: "SF" },
     { firstName: "Mathias",    lastName: "Lessort",               nationality: "FRA", position: "PF" },
-    { firstName: "Konstantin", lastName: "Papanikolaou",          nationality: "GRC", position: "PF" },
+    { firstName: "Dinos",      lastName: "Mitoglou",              nationality: "GRC", position: "PF" },
     { firstName: "Georgios",   lastName: "Papagiannis",           nationality: "GRC", position: "C"  },
     { firstName: "Howard",     lastName: "Sant-Roos",             nationality: "FRA", position: "C"  },
     { firstName: "Tyrese",     lastName: "Martin",                nationality: "USA", position: "SF" },

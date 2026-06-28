@@ -76,7 +76,7 @@ export function makeSampleTeam(opts: SampleTeamOptions): Team {
   const strength = opts.strength ?? 12;
   const foreignCount = opts.foreignCount ?? 4;
   const homegrownCount = opts.homegrownCount ?? 5;
-  const foreignPool = opts.foreignPool ?? ["USA", "SRB", "FRA", "GRE", "LTU"];
+  const foreignPool = opts.foreignPool ?? ["USA", "SRB", "FRA", "GRC", "LTU"];
 
   const players: Player[] = LINEUP_ORDER.map((lineupPosition, i) => {
     const entry: RosterEntry | undefined = opts.nameRoster?.[i];
