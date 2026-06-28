@@ -14,6 +14,7 @@ import { Crest } from "@/components/Crest";
 import { Icon, type IconName } from "@/components/Icon";
 import { SeasonAwards } from "@/components/SeasonAwards";
 import { computeAwards } from "@/lib/awards";
+import { asset } from "@/lib/asset";
 
 type Tab = "dashboard" | "roster" | "schedule" | "tactics" | "stats" | "match" | "market";
 
@@ -35,8 +36,13 @@ export default function Page() {
     return (
       <div className="app">
         <div className="hero" style={{ marginTop: "24vh" }}>
-          <div className="mark"><Icon name="ball" size={46} /></div>
-          <h1>Courtside</h1>
+          <img
+            className="hero-logo"
+            src={asset("assets/logo.png")}
+            width={240}
+            height={240}
+            alt="Basketball Manager"
+          />
         </div>
       </div>
     );
@@ -48,8 +54,13 @@ export default function Page() {
       <div className="app">
         <div className="screen">
           <div className="hero">
-            <div className="mark"><Icon name="ball" size={46} /></div>
-            <h1>Courtside</h1>
+            <img
+              className="hero-logo"
+              src={asset("assets/logo.png")}
+              width={200}
+              height={200}
+              alt="Basketball Manager"
+            />
             <p>International Basketball Manager. Pick a EuroLeague club and manage your season.</p>
           </div>
           <h2 style={{ marginTop: 24 }}>Choose your club</h2>
@@ -89,7 +100,13 @@ export default function Page() {
     <div className="shell">
       <aside className="sidebar">
         <div className="brand">
-          <span className="ball"><Icon name="ball" size={24} /></span>
+          <img
+            className="brand-logo"
+            src={asset("assets/logo.png")}
+            width={48}
+            height={48}
+            alt="Basketball Manager"
+          />
           <span className="name">Courtside</span>
         </div>
         <nav className="side-nav">
