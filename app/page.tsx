@@ -138,7 +138,7 @@ export default function Page() {
           />
         )}
         {tab === "tactics" && <TacticsBoard tactics={game.tactics} onChange={game.setTactics} />}
-        {tab === "stats" && <Stats league={game.league} userTeamId={userTeamId} />}
+        {tab === "stats" && <Stats stats={game.seasonStats} userTeamId={userTeamId} configs={game.league.configs} />}
         {tab === "match" && (
           <MatchScreen game={game} userTeamId={userTeamId} onGoTable={() => setTab("dashboard")} />
         )}
@@ -239,7 +239,7 @@ function MatchScreen({
       fixture={fixture}
       userTeamId={userTeamId}
       tactics={game.tactics}
-      onComplete={(h, a) => game.completeMatchday(fixture, h, a)}
+      onComplete={(h, a, result) => game.completeMatchday(fixture, h, a, result)}
     />
   );
 }

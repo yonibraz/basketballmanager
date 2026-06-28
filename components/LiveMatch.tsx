@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MatchEngine, type LiveSide, type LiveState } from "@/src/engine/MatchEngine";
-import type { MatchEvent, OffensiveFocus, Tactics } from "@/src/types";
+import type { MatchEvent, MatchResult, OffensiveFocus, Tactics } from "@/src/types";
 import { type Fixture, type League, aiTactics, fixtureSeed, teamById } from "@/lib/league";
 import { gameClock } from "@/lib/ratings";
 import { BoxTable, describe, isShown } from "./matchShared";
@@ -25,7 +25,7 @@ export function LiveMatch({
   fixture: Fixture;
   userTeamId: string;
   tactics: Tactics;
-  onComplete: (homeScore: number, awayScore: number) => void;
+  onComplete: (homeScore: number, awayScore: number, result: MatchResult) => void;
 }) {
   const userSide: LiveSide = fixture.homeId === userTeamId ? "home" : "away";
   const oppSide: LiveSide = userSide === "home" ? "away" : "home";
@@ -311,7 +311,7 @@ export function LiveMatch({
             </p>
             <BoxTable box={result.home} userId={userTeamId} />
             <BoxTable box={result.away} userId={userTeamId} />
-            <button className="btn btn-primary" style={{ marginTop: 8 }} onClick={() => onComplete(result.home.points, result.away.points)}>
+            <button className="btn btn-primary" style={{ marginTop: 8 }} onClick={() => onComplete(result.home.points, result.away.points, result)}>
               Continue →
             </button>
           </div>

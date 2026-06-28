@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { DEFAULT_TACTICS, type Tactics } from "@/src/types";
+import { DEFAULT_TACTICS, type MatchResult, type PlayerBoxScore, type Tactics } from "@/src/types";
 import { Rng } from "@/src/rng";
 import {
   type Fixture,
@@ -20,6 +20,27 @@ import { developPlayers } from "./playerDev";
 
 const SAVE_KEY = "courtside-save-v2";
 const DEFAULT_SEED = 20260626;
+
+export interface AccumulatedStats {
+  playerId: string;
+  name: string;
+  teamId: string;
+  gamesPlayed: number;
+  points: number;
+  rebounds: number;
+  assists: number;
+  steals: number;
+  blocks: number;
+  turnovers: number;
+  fieldGoalsMade: number;
+  fieldGoalsAttempted: number;
+  freeThrowsMade: number;
+  freeThrowsAttempted: number;
+  threePointersMade: number;
+  threePointersAttempted: number;
+  secondsPlayed: number;
+  fouls: number;
+}
 
 interface SavedResult {
   matchday: number;
@@ -44,6 +65,7 @@ interface SaveData {
   tactics: Tactics;
   currentMatchday: number;
   results: SavedResult[];
+  seasonStats?: Record<string, AccumulatedStats>;
   playoff?: PlayoffState;
 }
 
@@ -55,14 +77,68 @@ export interface Game {
   currentMatchday: number;
   seasonOver: boolean;
   userFixture: Fixture | null;
+  seasonStats: Record<string, AccumulatedStats>;
   playoff: PlayoffState;
   playoffFixture: PlayoffGame | null;
   chooseTeam: (id: string) => void;
   setTactics: (t: Tactics) => void;
   /** Record the user's (already simulated) result, then sim the rest + advance. */
-  completeMatchday: (userFixture: Fixture, homeScore: number, awayScore: number) => void;
+  completeMatchday: (userFixture: Fixture, homeScore: number, awayScore: number, userResult: MatchResult) => void;
   completePlayoffGame: (homeScore: number, awayScore: number) => void;
   newSeason: () => void;
+}
+
+function mergeBoxScore(
+  accumulated: Record<string, AccumulatedStats>,
+  teamId: string,
+  players: PlayerBoxScore[],
+): Record<string, AccumulatedStats> {
+  const next = { ...accumulated };
+  for (const p of players) {
+    const existing = next[p.playerId];
+    if (existing) {
+      next[p.playerId] = {
+        ...existing,
+        gamesPlayed: existing.gamesPlayed + 1,
+        points: existing.points + p.points,
+        rebounds: existing.rebounds + p.offensiveRebounds + p.defensiveRebounds,
+        assists: existing.assists + p.assists,
+        steals: existing.steals + p.steals,
+        blocks: existing.blocks + p.blocks,
+        turnovers: existing.turnovers + p.turnovers,
+        fieldGoalsMade: existing.fieldGoalsMade + p.fieldGoalsMade,
+        fieldGoalsAttempted: existing.fieldGoalsAttempted + p.fieldGoalsAttempted,
+        freeThrowsMade: existing.freeThrowsMade + p.freeThrowsMade,
+        freeThrowsAttempted: existing.freeThrowsAttempted + p.freeThrowsAttempted,
+        threePointersMade: existing.threePointersMade + p.threePointersMade,
+        threePointersAttempted: existing.threePointersAttempted + p.threePointersAttempted,
+        secondsPlayed: existing.secondsPlayed + p.secondsPlayed,
+        fouls: existing.fouls + p.fouls,
+      };
+    } else {
+      next[p.playerId] = {
+        playerId: p.playerId,
+        name: p.name,
+        teamId,
+        gamesPlayed: 1,
+        points: p.points,
+        rebounds: p.offensiveRebounds + p.defensiveRebounds,
+        assists: p.assists,
+        steals: p.steals,
+        blocks: p.blocks,
+        turnovers: p.turnovers,
+        fieldGoalsMade: p.fieldGoalsMade,
+        fieldGoalsAttempted: p.fieldGoalsAttempted,
+        freeThrowsMade: p.freeThrowsMade,
+        freeThrowsAttempted: p.freeThrowsAttempted,
+        threePointersMade: p.threePointersMade,
+        threePointersAttempted: p.threePointersAttempted,
+        secondsPlayed: p.secondsPlayed,
+        fouls: p.fouls,
+      };
+    }
+  }
+  return next;
 }
 
 function findUserFixture(league: League, matchday: number, userTeamId: string | null): Fixture | null {
@@ -107,6 +183,7 @@ export function useGame(): Game {
   const [userTeamId, setUserTeamId] = useState<string | null>(null);
   const [tactics, setTacticsState] = useState<Tactics>(DEFAULT_TACTICS);
   const [currentMatchday, setCurrentMatchday] = useState(1);
+  const [seasonStats, setSeasonStats] = useState<Record<string, AccumulatedStats>>({});
   const [playoff, setPlayoff] = useState<PlayoffState>(DEFAULT_PLAYOFF);
 
   // Load any saved game on mount (client only).
@@ -122,6 +199,7 @@ export function useGame(): Game {
           setUserTeamId(save.userTeamId);
           setTacticsState(save.tactics ?? DEFAULT_TACTICS);
           setCurrentMatchday(save.currentMatchday ?? 1);
+          setSeasonStats(save.seasonStats ?? {});
           if (save.playoff) setPlayoff(save.playoff);
         }
       }
@@ -132,7 +210,15 @@ export function useGame(): Game {
   }, []);
 
   const persist = useCallback(
-    (next: Partial<{ userTeamId: string | null; tactics: Tactics; currentMatchday: number; league: League; developmentPasses: number; playoff: PlayoffState }>) => {
+    (next: Partial<{
+      userTeamId: string | null;
+      tactics: Tactics;
+      currentMatchday: number;
+      league: League;
+      developmentPasses: number;
+      seasonStats: Record<string, AccumulatedStats>;
+      playoff: PlayoffState;
+    }>) => {
       const lg = next.league ?? league;
       const save: SaveData = {
         v: 2,
@@ -150,6 +236,7 @@ export function useGame(): Game {
             homeScore: f.homeScore ?? 0,
             awayScore: f.awayScore ?? 0,
           })),
+        seasonStats: next.seasonStats !== undefined ? next.seasonStats : seasonStats,
         playoff: next.playoff ?? playoff,
       };
       try {
@@ -158,7 +245,7 @@ export function useGame(): Game {
         /* storage may be unavailable */
       }
     },
-    [league, userTeamId, tactics, currentMatchday, playoff],
+    [league, userTeamId, tactics, currentMatchday, seasonStats, playoff],
   );
 
   const chooseTeam = useCallback(
@@ -178,20 +265,32 @@ export function useGame(): Game {
   );
 
   const completeMatchday = useCallback(
-    (userFixture: Fixture, homeScore: number, awayScore: number) => {
+    (userFixture: Fixture, homeScore: number, awayScore: number, userResult: MatchResult) => {
       if (!userTeamId) return;
+
+      // Use the MatchResult from the live viewer directly — it already contains
+      // the authentic box scores, including any mid-game tactics/subs the user applied.
+      let nextStats = { ...seasonStats };
+      nextStats = mergeBoxScore(nextStats, userFixture.homeId, userResult.home.players);
+      nextStats = mergeBoxScore(nextStats, userFixture.awayId, userResult.away.players);
+
       // Record the user's match (already simulated by the viewer).
       recordResult(league, userFixture, homeScore, awayScore);
+
       // Simulate every other fixture on this matchday instantly.
       for (const f of fixturesForMatchday(league, currentMatchday)) {
         if (f.played) continue;
         const res = simulateFixture(league, f, userTeamId, tactics);
         recordResult(league, f, res.home.points, res.away.points);
+        nextStats = mergeBoxScore(nextStats, f.homeId, res.home.players);
+        nextStats = mergeBoxScore(nextStats, f.awayId, res.away.players);
       }
+
       const nextMatchday = currentMatchday + 1;
       const cloned = { ...league };
       setLeague(cloned);
       setCurrentMatchday(nextMatchday);
+      setSeasonStats(nextStats);
 
       // Auto-generate playoff bracket when regular season ends.
       let nextPlayoff = playoff;
@@ -201,9 +300,9 @@ export function useGame(): Game {
         setPlayoff(nextPlayoff);
       }
 
-      persist({ currentMatchday: nextMatchday, league: cloned, playoff: nextPlayoff });
+      persist({ currentMatchday: nextMatchday, league: cloned, seasonStats: nextStats, playoff: nextPlayoff });
     },
-    [league, userTeamId, tactics, currentMatchday, playoff, persist],
+    [league, userTeamId, tactics, currentMatchday, seasonStats, playoff, persist],
   );
 
   const completePlayoffGame = useCallback(
@@ -259,11 +358,13 @@ export function useGame(): Game {
     devPassesRef.current = nextPasses;
     const lg = makeLeague(seed);
     applyDevelopmentPasses(lg, nextPasses);
+    const emptyStats: Record<string, AccumulatedStats> = {};
+    const resetPlayoff = DEFAULT_PLAYOFF;
     setLeague(lg);
     setCurrentMatchday(1);
-    const resetPlayoff = DEFAULT_PLAYOFF;
+    setSeasonStats(emptyStats);
     setPlayoff(resetPlayoff);
-    persist({ currentMatchday: 1, league: lg, developmentPasses: nextPasses, playoff: resetPlayoff });
+    persist({ currentMatchday: 1, league: lg, developmentPasses: nextPasses, seasonStats: emptyStats, playoff: resetPlayoff });
   }, [persist]);
 
   // The current active playoff game (null when not in playoffs or done).
@@ -286,6 +387,7 @@ export function useGame(): Game {
     currentMatchday,
     seasonOver: playoff.phase === "done",
     userFixture: findUserFixture(league, currentMatchday, userTeamId),
+    seasonStats,
     playoff,
     playoffFixture: getPlayoffFixture(),
     chooseTeam,
