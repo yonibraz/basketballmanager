@@ -63,7 +63,7 @@ export function Roster({ team, config }: { team: Team; config: TeamConfig }) {
               </div>
               <div className="pmeta">
                 <span className="pos-tag">{p.position}</span>
-                <span>{p.nationality} · {p.age}y</span>
+                <span>{p.nationality}</span>
                 {isForeign(p, team.country) ? (
                   <span className="badge foreign">FOR</span>
                 ) : p.homegrown ? (
@@ -71,8 +71,11 @@ export function Roster({ team, config }: { team: Team; config: TeamConfig }) {
                 ) : null}
               </div>
             </div>
-            <span className="badge active" style={{ marginLeft: "auto" }}>Active</span>
-            <div className="ovr" style={{ marginLeft: 16 }}>
+            <div className="ovr" style={{ marginLeft: "auto" }}>
+              {p.age ?? "?"}
+              <small>AGE</small>
+            </div>
+            <div className="ovr" style={{ marginLeft: 8 }}>
               {overall(p)}
               <small>OVR</small>
             </div>
