@@ -7,6 +7,7 @@
 
 import { MatchEngine } from "@/src/engine/MatchEngine";
 import { makeSampleTeam } from "@/src/data/sampleTeams";
+import { REAL_ROSTERS } from "@/src/data/realRosters";
 import { seedFromString } from "@/src/rng";
 import { DEFAULT_TACTICS, type MatchResult, type Tactics, type Team } from "@/src/types";
 
@@ -26,8 +27,8 @@ export const TEAM_CONFIGS: readonly TeamConfig[] = [
   { id: "RMB", name: "Real Madrid", short: "RMB", country: "ESP", strength: 16, quotaRuleId: "ESP_ACB", foreignCount: 4, homegrownCount: 5 },
   { id: "FCB", name: "Barcelona", short: "FCB", country: "ESP", strength: 15, quotaRuleId: "ESP_ACB", foreignCount: 4, homegrownCount: 5 },
   { id: "MTA", name: "Maccabi Tel Aviv", short: "MTA", country: "ISR", strength: 15, quotaRuleId: "ISR_BSL", foreignCount: 5, homegrownCount: 4 },
-  { id: "OLY", name: "Olympiacos", short: "OLY", country: "GRE", strength: 14, quotaRuleId: "EUR_EUROLEAGUE", foreignCount: 6, homegrownCount: 3 },
-  { id: "PAO", name: "Panathinaikos", short: "PAO", country: "GRE", strength: 15, quotaRuleId: "EUR_EUROLEAGUE", foreignCount: 6, homegrownCount: 3 },
+  { id: "OLY", name: "Olympiacos", short: "OLY", country: "GRC", strength: 14, quotaRuleId: "EUR_EUROLEAGUE", foreignCount: 6, homegrownCount: 3 },
+  { id: "PAO", name: "Panathinaikos", short: "PAO", country: "GRC", strength: 15, quotaRuleId: "EUR_EUROLEAGUE", foreignCount: 6, homegrownCount: 3 },
   { id: "FEN", name: "Fenerbahce", short: "FEN", country: "TUR", strength: 14, quotaRuleId: "EUR_EUROLEAGUE", foreignCount: 6, homegrownCount: 3 },
   { id: "PAR", name: "Partizan", short: "PAR", country: "SRB", strength: 13, quotaRuleId: "EUR_EUROLEAGUE", foreignCount: 5, homegrownCount: 4 },
   { id: "BAY", name: "Bayern Munich", short: "BAY", country: "GER", strength: 13, quotaRuleId: "EUR_EUROLEAGUE", foreignCount: 6, homegrownCount: 3 },
@@ -115,6 +116,7 @@ export function makeLeague(seasonSeed: number): League {
       strength: c.strength,
       foreignCount: c.foreignCount,
       homegrownCount: c.homegrownCount,
+      nameRoster: REAL_ROSTERS[c.id],
     }),
   );
 
