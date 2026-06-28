@@ -7,6 +7,7 @@
 
 import { MatchEngine } from "@/src/engine/MatchEngine";
 import { makeSampleTeam } from "@/src/data/sampleTeams";
+import { REAL_ROSTERS } from "@/src/data/realRosters";
 import { seedFromString } from "@/src/rng";
 import { DEFAULT_TACTICS, type MatchResult, type Tactics, type Team } from "@/src/types";
 
@@ -115,6 +116,7 @@ export function makeLeague(seasonSeed: number): League {
       strength: c.strength,
       foreignCount: c.foreignCount,
       homegrownCount: c.homegrownCount,
+      nameRoster: REAL_ROSTERS[c.id],
     }),
   );
 

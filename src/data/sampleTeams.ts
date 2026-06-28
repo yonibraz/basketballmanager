@@ -6,6 +6,7 @@
 
 import { Rng } from "../rng.js";
 import type { Player, PlayerAttributes, Position, Team } from "../types.js";
+import type { RosterEntry } from "./realRosters.js";
 
 const FIRST_NAMES = [
   "Luka", "Nikola", "Sergio", "Vassilis", "Dario", "Bogdan", "Theo", "Mateusz",
@@ -66,6 +67,8 @@ export interface SampleTeamOptions {
   homegrownCount?: number;
   /** Foreign nationality pool to draw from. */
   foreignPool?: string[];
+  /** Optional real roster entries; when provided, overrides generated names/nationality/position by index. */
+  nameRoster?: RosterEntry[];
 }
 
 export function makeSampleTeam(opts: SampleTeamOptions): Team {
@@ -75,15 +78,21 @@ export function makeSampleTeam(opts: SampleTeamOptions): Team {
   const homegrownCount = opts.homegrownCount ?? 5;
   const foreignPool = opts.foreignPool ?? ["USA", "SRB", "FRA", "GRE", "LTU"];
 
-  const players: Player[] = LINEUP_ORDER.map((position, i) => {
-    const foreign = i < foreignCount;
-    const nationality = foreign ? foreignPool[i % foreignPool.length]! : opts.country;
+  const players: Player[] = LINEUP_ORDER.map((lineupPosition, i) => {
+    const entry: RosterEntry | undefined = opts.nameRoster?.[i];
+    // If a real roster entry exists, use its position; otherwise fall back to LINEUP_ORDER.
+    const position: Position = entry?.position ?? lineupPosition;
+    const slotForeign = i < foreignCount;
+    const fallbackNationality = slotForeign ? foreignPool[i % foreignPool.length]! : opts.country;
+    const nationality = entry?.nationality ?? fallbackNationality;
+    // When a real roster entry is present, derive foreign status from nationality, not slot index.
+    const foreign = entry ? nationality !== opts.country : slotForeign;
     // Homegrown players are taken from the non-foreign tail of the roster.
     const homegrown = !foreign && i >= LINEUP_ORDER.length - homegrownCount;
     return {
       id: `${opts.id}-p${i + 1}`,
-      firstName: FIRST_NAMES[(opts.seed + i) % FIRST_NAMES.length]!,
-      lastName: LAST_NAMES[(opts.seed * 3 + i) % LAST_NAMES.length]!,
+      firstName: entry?.firstName ?? FIRST_NAMES[(opts.seed + i) % FIRST_NAMES.length]!,
+      lastName: entry?.lastName ?? LAST_NAMES[(opts.seed * 3 + i) % LAST_NAMES.length]!,
       nationality,
       age: rng.int(19, 34),
       position,
