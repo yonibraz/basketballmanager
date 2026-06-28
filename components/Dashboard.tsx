@@ -9,14 +9,9 @@ import {
   sortedStandings,
 } from "@/lib/league";
 import { overall } from "@/lib/ratings";
+import { ordinal } from "@/lib/format";
 import { Crest } from "@/components/Crest";
 import { Icon } from "@/components/Icon";
-
-function ordinal(n: number): string {
-  const s = ["th", "st", "nd", "rd"];
-  const v = n % 100;
-  return n + (s[(v - 20) % 10] ?? s[v] ?? s[0]!);
-}
 
 /** Rank of a value across teams; `asc` true means lower is better. */
 function rankOf(values: { id: string; v: number }[], id: string, asc = false): number {

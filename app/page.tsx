@@ -11,6 +11,8 @@ import { Dashboard } from "@/components/Dashboard";
 import { Stats } from "@/components/Stats";
 import { Crest } from "@/components/Crest";
 import { Icon, type IconName } from "@/components/Icon";
+import { SeasonAwards } from "@/components/SeasonAwards";
+import { computeAwards } from "@/lib/awards";
 
 type Tab = "dashboard" | "roster" | "schedule" | "tactics" | "stats" | "match";
 
@@ -92,7 +94,7 @@ export default function Page() {
           ))}
         </nav>
         <div className="side-foot">
-          <button className="side-item" onClick={() => game.newSeason()}>
+          <button className="side-item" onClick={() => { game.newSeason(); setTab("dashboard"); }}>
             <Icon name="settings" size={19} />
             <span className="lbl">New season</span>
           </button>
@@ -145,24 +147,17 @@ function MatchScreen({
   onGoTable: () => void;
 }) {
   if (game.seasonOver) {
+    const awards = computeAwards(game.league);
     const table = sortedStandings(game.league);
     const myPos = table.findIndex((s) => s.teamId === userTeamId) + 1;
-    const champ = game.league.configs[table[0]!.teamId]!;
     return (
-      <div className="screen">
-        <div className="hero" style={{ paddingTop: 40, marginBottom: 16 }}>
-          <div className="mark"><Icon name="trophy" size={44} /></div>
-          <h1>{champ.name}</h1>
-          <p>Champions</p>
-        </div>
-        <div className="card center">
-          <p style={{ fontWeight: 700, fontSize: 18 }}>You finished {myPos ? `#${myPos}` : "—"}</p>
-          <p className="muted" style={{ marginTop: 4 }}>of {TEAM_CONFIGS.length} clubs</p>
-        </div>
-        <button className="btn btn-primary" onClick={() => { game.newSeason(); onGoTable(); }}>
-          Start a new season
-        </button>
-      </div>
+      <SeasonAwards
+        awards={awards}
+        userTeamId={userTeamId}
+        userPosition={myPos}
+        totalTeams={TEAM_CONFIGS.length}
+        onNewSeason={() => { game.newSeason(); onGoTable(); }}
+      />
     );
   }
 
