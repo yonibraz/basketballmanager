@@ -9,12 +9,13 @@ import { TacticsBoard } from "@/components/TacticsBoard";
 import { LiveMatch } from "@/components/LiveMatch";
 import { Dashboard } from "@/components/Dashboard";
 import { Stats } from "@/components/Stats";
+import { Market } from "@/components/Market";
 import { Crest } from "@/components/Crest";
 import { Icon, type IconName } from "@/components/Icon";
 import { SeasonAwards } from "@/components/SeasonAwards";
 import { computeAwards } from "@/lib/awards";
 
-type Tab = "dashboard" | "roster" | "schedule" | "tactics" | "stats" | "match";
+type Tab = "dashboard" | "roster" | "schedule" | "tactics" | "stats" | "match" | "market";
 
 const NAV: { k: Tab; ic: IconName; l: string }[] = [
   { k: "dashboard", ic: "dashboard", l: "Dashboard" },
@@ -23,6 +24,7 @@ const NAV: { k: Tab; ic: IconName; l: string }[] = [
   { k: "tactics", ic: "tactics", l: "Tactics" },
   { k: "stats", ic: "table", l: "Stats" },
   { k: "match", ic: "play", l: "Play" },
+  { k: "market", ic: "ball", l: "Market" },
 ];
 
 export default function Page() {
@@ -139,6 +141,15 @@ export default function Page() {
         )}
         {tab === "tactics" && <TacticsBoard tactics={game.tactics} onChange={game.setTactics} />}
         {tab === "stats" && <Stats stats={game.seasonStats} userTeamId={userTeamId} configs={game.league.configs} />}
+        {tab === "market" && (
+          <Market
+            freeAgents={game.freeAgents}
+            userTeam={team}
+            budget={game.budget}
+            onSign={game.signPlayer}
+            onRelease={game.releasePlayer}
+          />
+        )}
         {tab === "match" && (
           <MatchScreen game={game} userTeamId={userTeamId} onGoTable={() => setTab("dashboard")} />
         )}

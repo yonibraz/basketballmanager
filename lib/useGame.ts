@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { DEFAULT_TACTICS, type MatchResult, type PlayerBoxScore, type Tactics } from "@/src/types";
+import { DEFAULT_TACTICS, type MatchResult, type Player, type PlayerBoxScore, type Tactics } from "@/src/types";
 import { Rng } from "@/src/rng";
 import {
   type Fixture,
@@ -16,10 +16,12 @@ import {
   resolvePlayoffSemis,
   simulateFixture,
 } from "./league";
+import { type FreeAgent, generateFreeAgents } from "./market";
 import { developPlayers } from "./playerDev";
 
 const SAVE_KEY = "courtside-save-v2";
 const DEFAULT_SEED = 20260626;
+const DEFAULT_BUDGET = 50;
 
 export interface AccumulatedStats {
   playerId: string;
@@ -65,6 +67,10 @@ interface SaveData {
   tactics: Tactics;
   currentMatchday: number;
   results: SavedResult[];
+  budget?: number;
+  freeAgents?: FreeAgent[];
+  /** Persisted user-team roster (captures signed/released changes). */
+  userTeamPlayers?: Player[];
   seasonStats?: Record<string, AccumulatedStats>;
   playoff?: PlayoffState;
 }
@@ -77,6 +83,8 @@ export interface Game {
   currentMatchday: number;
   seasonOver: boolean;
   userFixture: Fixture | null;
+  budget: number;
+  freeAgents: FreeAgent[];
   seasonStats: Record<string, AccumulatedStats>;
   playoff: PlayoffState;
   playoffFixture: PlayoffGame | null;
@@ -86,6 +94,10 @@ export interface Game {
   completeMatchday: (userFixture: Fixture, homeScore: number, awayScore: number, userResult: MatchResult) => void;
   completePlayoffGame: (homeScore: number, awayScore: number) => void;
   newSeason: () => void;
+  /** Sign a free agent. Returns an error string on failure, null on success. */
+  signPlayer: (fa: FreeAgent) => string | null;
+  /** Release a player from the user's team (adds £3M waiver comp to budget). */
+  releasePlayer: (playerId: string) => void;
 }
 
 function mergeBoxScore(
@@ -170,7 +182,24 @@ function rebuild(save: SaveData): League {
     );
     if (f) recordResult(league, f, r.homeScore, r.awayScore);
   }
+  // Restore any roster changes (signed/released players) made by the user.
+  if (save.userTeamId && save.userTeamPlayers) {
+    const idx = league.teams.findIndex((t) => t.id === save.userTeamId);
+    if (idx !== -1) {
+      league.teams = league.teams.map((t, i) =>
+        i === idx ? { ...t, players: save.userTeamPlayers! } : t,
+      );
+    }
+  }
   return league;
+}
+
+/** Replace a team in league.teams immutably, returning a new league object. */
+function replaceTeamInLeague(league: League, updatedTeam: import("@/src/types").Team): League {
+  return {
+    ...league,
+    teams: league.teams.map((t) => (t.id === updatedTeam.id ? updatedTeam : t)),
+  };
 }
 
 const DEFAULT_PLAYOFF: PlayoffState = { bracket: null, phase: "none", currentGame: 0 };
@@ -183,6 +212,8 @@ export function useGame(): Game {
   const [userTeamId, setUserTeamId] = useState<string | null>(null);
   const [tactics, setTacticsState] = useState<Tactics>(DEFAULT_TACTICS);
   const [currentMatchday, setCurrentMatchday] = useState(1);
+  const [budget, setBudget] = useState<number>(DEFAULT_BUDGET);
+  const [freeAgents, setFreeAgents] = useState<FreeAgent[]>(() => generateFreeAgents(DEFAULT_SEED));
   const [seasonStats, setSeasonStats] = useState<Record<string, AccumulatedStats>>({});
   const [playoff, setPlayoff] = useState<PlayoffState>(DEFAULT_PLAYOFF);
 
@@ -199,6 +230,8 @@ export function useGame(): Game {
           setUserTeamId(save.userTeamId);
           setTacticsState(save.tactics ?? DEFAULT_TACTICS);
           setCurrentMatchday(save.currentMatchday ?? 1);
+          setBudget(save.budget ?? DEFAULT_BUDGET);
+          setFreeAgents(save.freeAgents ?? generateFreeAgents(save.seasonSeed));
           setSeasonStats(save.seasonStats ?? {});
           if (save.playoff) setPlayoff(save.playoff);
         }
@@ -215,18 +248,28 @@ export function useGame(): Game {
       tactics: Tactics;
       currentMatchday: number;
       league: League;
+      budget: number;
+      freeAgents: FreeAgent[];
       developmentPasses: number;
       seasonStats: Record<string, AccumulatedStats>;
       playoff: PlayoffState;
     }>) => {
       const lg = next.league ?? league;
+      const resolvedTeamId = next.userTeamId !== undefined ? next.userTeamId : userTeamId;
+      // Persist the user team's current roster so signed/released players survive reload.
+      const userTeamPlayers = resolvedTeamId
+        ? lg.teams.find((t) => t.id === resolvedTeamId)?.players
+        : undefined;
       const save: SaveData = {
         v: 2,
         seasonSeed: seedRef.current,
         developmentPasses: next.developmentPasses !== undefined ? next.developmentPasses : devPassesRef.current,
-        userTeamId: next.userTeamId !== undefined ? next.userTeamId : userTeamId,
+        userTeamId: resolvedTeamId,
         tactics: next.tactics ?? tactics,
         currentMatchday: next.currentMatchday ?? currentMatchday,
+        budget: next.budget !== undefined ? next.budget : budget,
+        freeAgents: next.freeAgents !== undefined ? next.freeAgents : freeAgents,
+        userTeamPlayers,
         results: lg.schedule
           .filter((f) => f.played)
           .map((f) => ({
@@ -245,7 +288,7 @@ export function useGame(): Game {
         /* storage may be unavailable */
       }
     },
-    [league, userTeamId, tactics, currentMatchday, seasonStats, playoff],
+    [league, userTeamId, tactics, currentMatchday, budget, freeAgents, seasonStats, playoff],
   );
 
   const chooseTeam = useCallback(
@@ -358,14 +401,71 @@ export function useGame(): Game {
     devPassesRef.current = nextPasses;
     const lg = makeLeague(seed);
     applyDevelopmentPasses(lg, nextPasses);
+    const freshAgents = generateFreeAgents(seed);
     const emptyStats: Record<string, AccumulatedStats> = {};
     const resetPlayoff = DEFAULT_PLAYOFF;
     setLeague(lg);
     setCurrentMatchday(1);
+    setBudget(DEFAULT_BUDGET);
+    setFreeAgents(freshAgents);
     setSeasonStats(emptyStats);
     setPlayoff(resetPlayoff);
-    persist({ currentMatchday: 1, league: lg, developmentPasses: nextPasses, seasonStats: emptyStats, playoff: resetPlayoff });
+    persist({ currentMatchday: 1, league: lg, developmentPasses: nextPasses, budget: DEFAULT_BUDGET, freeAgents: freshAgents, seasonStats: emptyStats, playoff: resetPlayoff });
   }, [persist]);
+
+  const signPlayer = useCallback(
+    (fa: FreeAgent): string | null => {
+      if (!userTeamId) return "No team selected";
+      const currentTeam = league.teams.find((t) => t.id === userTeamId);
+      if (!currentTeam) return "Team not found";
+
+      if (budget < fa.askingPrice) {
+        return `Insufficient budget (need £${fa.askingPrice}M)`;
+      }
+      if (currentTeam.players.length >= 12) {
+        return "Roster full — release a player first";
+      }
+
+      const newBudget = budget - fa.askingPrice;
+      // Remove the fa's askingPrice extra field when adding to the squad
+      const { askingPrice: _price, ...playerOnly } = fa;
+      const updatedTeam = {
+        ...currentTeam,
+        players: [...currentTeam.players, playerOnly],
+      };
+      const updatedLeague = replaceTeamInLeague(league, updatedTeam);
+      const updatedAgents = freeAgents.filter((a) => a.id !== fa.id);
+
+      setLeague(updatedLeague);
+      setBudget(newBudget);
+      setFreeAgents(updatedAgents);
+      persist({ league: updatedLeague, budget: newBudget, freeAgents: updatedAgents });
+      return null;
+    },
+    [league, userTeamId, budget, freeAgents, persist],
+  );
+
+  const releasePlayer = useCallback(
+    (playerId: string) => {
+      if (!userTeamId) return;
+      const currentTeam = league.teams.find((t) => t.id === userTeamId);
+      if (!currentTeam) return;
+      // The match engine requires at least 5 players to start a game.
+      if (currentTeam.players.length <= 5) return;
+
+      const updatedTeam = {
+        ...currentTeam,
+        players: currentTeam.players.filter((p) => p.id !== playerId),
+      };
+      const newBudget = budget + 3; // £3M waiver compensation
+      const updatedLeague = replaceTeamInLeague(league, updatedTeam);
+
+      setLeague(updatedLeague);
+      setBudget(newBudget);
+      persist({ league: updatedLeague, budget: newBudget });
+    },
+    [league, userTeamId, budget, persist],
+  );
 
   // The current active playoff game (null when not in playoffs or done).
   function getPlayoffFixture(): PlayoffGame | null {
@@ -387,6 +487,8 @@ export function useGame(): Game {
     currentMatchday,
     seasonOver: playoff.phase === "done",
     userFixture: findUserFixture(league, currentMatchday, userTeamId),
+    budget,
+    freeAgents,
     seasonStats,
     playoff,
     playoffFixture: getPlayoffFixture(),
@@ -395,5 +497,7 @@ export function useGame(): Game {
     completeMatchday,
     completePlayoffGame,
     newSeason,
+    signPlayer,
+    releasePlayer,
   };
 }
