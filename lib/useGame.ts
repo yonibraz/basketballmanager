@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DEFAULT_TACTICS, type Tactics } from "@/src/types";
+import { Rng } from "@/src/rng";
 import {
   type Fixture,
   type League,
@@ -15,8 +16,9 @@ import {
   resolvePlayoffSemis,
   simulateFixture,
 } from "./league";
+import { developPlayers } from "./playerDev";
 
-const SAVE_KEY = "courtside-save-v1";
+const SAVE_KEY = "courtside-save-v2";
 const DEFAULT_SEED = 20260626;
 
 interface SavedResult {
@@ -34,8 +36,10 @@ interface PlayoffState {
 }
 
 interface SaveData {
-  v: 1;
+  v: 2;
   seasonSeed: number;
+  /** How many end-of-season development passes have been applied to this league. */
+  developmentPasses: number;
   userTeamId: string | null;
   tactics: Tactics;
   currentMatchday: number;
@@ -68,8 +72,22 @@ function findUserFixture(league: League, matchday: number, userTeamId: string | 
   );
 }
 
+/**
+ * Apply N deterministic development passes to a freshly-built league.
+ * Each pass uses a seed derived from the season seed XOR a pass-specific constant,
+ * so replaying the same passes always yields the same rosters.
+ */
+function applyDevelopmentPasses(lg: League, passes: number): void {
+  for (let i = 0; i < passes; i++) {
+    // XOR with pass index so each pass has a distinct but deterministic seed.
+    const devRng = new Rng((lg.seasonSeed ^ 0xdeadbeef) + i);
+    lg.teams = lg.teams.map((t) => developPlayers(t, devRng));
+  }
+}
+
 function rebuild(save: SaveData): League {
   const league = makeLeague(save.seasonSeed);
+  applyDevelopmentPasses(league, save.developmentPasses);
   for (const r of save.results) {
     const f = league.schedule.find(
       (x) => x.matchday === r.matchday && x.homeId === r.homeId && x.awayId === r.awayId,
@@ -84,6 +102,7 @@ const DEFAULT_PLAYOFF: PlayoffState = { bracket: null, phase: "none", currentGam
 export function useGame(): Game {
   const [ready, setReady] = useState(false);
   const seedRef = useRef(DEFAULT_SEED);
+  const devPassesRef = useRef(0);
   const [league, setLeague] = useState<League>(() => makeLeague(DEFAULT_SEED));
   const [userTeamId, setUserTeamId] = useState<string | null>(null);
   const [tactics, setTacticsState] = useState<Tactics>(DEFAULT_TACTICS);
@@ -96,8 +115,9 @@ export function useGame(): Game {
       const raw = localStorage.getItem(SAVE_KEY);
       if (raw) {
         const save = JSON.parse(raw) as SaveData;
-        if (save?.v === 1) {
+        if (save?.v === 2) {
           seedRef.current = save.seasonSeed;
+          devPassesRef.current = save.developmentPasses ?? 0;
           setLeague(rebuild(save));
           setUserTeamId(save.userTeamId);
           setTacticsState(save.tactics ?? DEFAULT_TACTICS);
@@ -112,11 +132,12 @@ export function useGame(): Game {
   }, []);
 
   const persist = useCallback(
-    (next: Partial<{ userTeamId: string | null; tactics: Tactics; currentMatchday: number; league: League; playoff: PlayoffState }>) => {
+    (next: Partial<{ userTeamId: string | null; tactics: Tactics; currentMatchday: number; league: League; developmentPasses: number; playoff: PlayoffState }>) => {
       const lg = next.league ?? league;
       const save: SaveData = {
-        v: 1,
+        v: 2,
         seasonSeed: seedRef.current,
+        developmentPasses: next.developmentPasses !== undefined ? next.developmentPasses : devPassesRef.current,
         userTeamId: next.userTeamId !== undefined ? next.userTeamId : userTeamId,
         tactics: next.tactics ?? tactics,
         currentMatchday: next.currentMatchday ?? currentMatchday,
@@ -234,12 +255,15 @@ export function useGame(): Game {
   const newSeason = useCallback(() => {
     const seed = (seedRef.current + 1013904223) >>> 0;
     seedRef.current = seed;
+    const nextPasses = devPassesRef.current + 1;
+    devPassesRef.current = nextPasses;
     const lg = makeLeague(seed);
+    applyDevelopmentPasses(lg, nextPasses);
     setLeague(lg);
     setCurrentMatchday(1);
     const resetPlayoff = DEFAULT_PLAYOFF;
     setPlayoff(resetPlayoff);
-    persist({ currentMatchday: 1, league: lg, playoff: resetPlayoff });
+    persist({ currentMatchday: 1, league: lg, developmentPasses: nextPasses, playoff: resetPlayoff });
   }, [persist]);
 
   // The current active playoff game (null when not in playoffs or done).

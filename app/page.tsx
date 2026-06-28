@@ -11,6 +11,8 @@ import { Dashboard } from "@/components/Dashboard";
 import { Stats } from "@/components/Stats";
 import { Crest } from "@/components/Crest";
 import { Icon, type IconName } from "@/components/Icon";
+import { SeasonAwards } from "@/components/SeasonAwards";
+import { computeAwards } from "@/lib/awards";
 
 type Tab = "dashboard" | "roster" | "schedule" | "tactics" | "stats" | "match";
 
@@ -97,7 +99,7 @@ export default function Page() {
           ))}
         </nav>
         <div className="side-foot">
-          <button className="side-item" onClick={() => game.newSeason()}>
+          <button className="side-item" onClick={() => { game.newSeason(); setTab("dashboard"); }}>
             <Icon name="settings" size={19} />
             <span className="lbl">New season</span>
           </button>
@@ -154,43 +156,23 @@ function MatchScreen({
   userTeamId: string;
   onGoTable: () => void;
 }) {
-  // Season is fully over (playoffs done) — show champion screen.
+  // Season is fully over (playoffs done) — show the awards ceremony, headlined by the playoff champion.
   if (game.playoff.phase === "done") {
     const { bracket } = game.playoff;
     const champId = bracket?.final.winnerId ?? null;
     const champ = champId ? game.league.configs[champId] : null;
-
-    // Determine if the user's team was in the playoff bracket at all.
-    const inPlayoffs = bracket
-      ? bracket.semis.some((s) => s.homeId === userTeamId || s.awayId === userTeamId)
-      : false;
-
-    let resultMsg: string;
-    if (champId === userTeamId) {
-      resultMsg = "Your team won the championship!";
-    } else if (inPlayoffs) {
-      resultMsg = "Your team was eliminated in the playoffs.";
-    } else {
-      // Determine finish position from standings.
-      const standings = sortedStandings(game.league);
-      const pos = standings.findIndex((s) => s.teamId === userTeamId) + 1;
-      resultMsg = pos > 0 ? `You finished #${pos} in the regular season.` : "Better luck next season.";
-    }
-
+    const awards = computeAwards(game.league);
+    const table = sortedStandings(game.league);
+    const myPos = table.findIndex((s) => s.teamId === userTeamId) + 1;
     return (
-      <div className="screen">
-        <div className="hero" style={{ paddingTop: 40, marginBottom: 16 }}>
-          <div className="mark"><Icon name="trophy" size={44} /></div>
-          <h1>{champ?.name ?? "—"}</h1>
-          <p>Champions</p>
-        </div>
-        <div className="card center">
-          <p style={{ fontWeight: 700, fontSize: 18 }}>{resultMsg}</p>
-        </div>
-        <button className="btn btn-primary" onClick={() => { game.newSeason(); onGoTable(); }}>
-          Start a new season
-        </button>
-      </div>
+      <SeasonAwards
+        awards={awards}
+        userTeamId={userTeamId}
+        userPosition={myPos}
+        totalTeams={TEAM_CONFIGS.length}
+        playoffChampion={champ ? { name: champ.name, isUser: champId === userTeamId } : undefined}
+        onNewSeason={() => { game.newSeason(); onGoTable(); }}
+      />
     );
   }
 
