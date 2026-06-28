@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MatchEngine, type LiveSide, type LiveState } from "@/src/engine/MatchEngine";
-import type { MatchEvent, OffensiveFocus, Tactics } from "@/src/types";
+import type { MatchEvent, MatchResult, OffensiveFocus, Tactics } from "@/src/types";
 import { type Fixture, type League, aiTactics, fixtureSeed, teamById } from "@/lib/league";
 import { gameClock } from "@/lib/ratings";
 import { BoxTable, describe, isShown } from "./matchShared";
+import { AnimatedNumber } from "@/components/AnimatedNumber";
 
 type Phase = "pre" | "play" | "done";
 type Panel = null | "tactics" | "subs" | "defense";
@@ -25,7 +26,7 @@ export function LiveMatch({
   fixture: Fixture;
   userTeamId: string;
   tactics: Tactics;
-  onComplete: (homeScore: number, awayScore: number) => void;
+  onComplete: (homeScore: number, awayScore: number, result: MatchResult) => void;
 }) {
   const userSide: LiveSide = fixture.homeId === userTeamId ? "home" : "away";
   const oppSide: LiveSide = userSide === "home" ? "away" : "home";
@@ -64,6 +65,34 @@ export function LiveMatch({
   const [feed, setFeed] = useState<MatchEvent[]>([]);
   const [live, setLive] = useState<LiveState>(() => engine.getLiveState());
   const [panel, setPanel] = useState<Panel>(null);
+
+  // Score flash states
+  const [flashHome, setFlashHome] = useState(false);
+  const [flashAway, setFlashAway] = useState(false);
+
+  // Flash home score on change — initialize from actual starting score, not 0,
+  // so remounting mid-game (navigate away and back) doesn't trigger a spurious flash.
+  const initialState = engine.getLiveState();
+  const prevHomeRef = useRef(initialState.homeScore);
+  useEffect(() => {
+    if (live.homeScore !== prevHomeRef.current) {
+      prevHomeRef.current = live.homeScore;
+      setFlashHome(true);
+      const t = setTimeout(() => setFlashHome(false), 500);
+      return () => clearTimeout(t);
+    }
+  }, [live.homeScore]);
+
+  // Flash away score on change
+  const prevAwayRef = useRef(initialState.awayScore);
+  useEffect(() => {
+    if (live.awayScore !== prevAwayRef.current) {
+      prevAwayRef.current = live.awayScore;
+      setFlashAway(true);
+      const t = setTimeout(() => setFlashAway(false), 500);
+      return () => clearTimeout(t);
+    }
+  }, [live.awayScore]);
 
   // Coaching selections.
   const [liveTactics, setLiveTactics] = useState<Tactics>(tactics);
@@ -159,7 +188,9 @@ export function LiveMatch({
       <div className="scoreboard">
         <div className="sb-team">
           <div className="nm" style={{ color: userSide === "home" ? "var(--accent)" : undefined }}>{homeCfg.short}</div>
-          <div className="sc">{live.homeScore}</div>
+          <div className={`sc${flashHome ? " scored" : ""}`}>
+            <AnimatedNumber value={live.homeScore} />
+          </div>
         </div>
         <div className="sb-mid">
           <div className="clock">{clk.quarter}</div>
@@ -167,7 +198,9 @@ export function LiveMatch({
         </div>
         <div className="sb-team">
           <div className="nm" style={{ color: userSide === "away" ? "var(--accent)" : undefined }}>{awayCfg.short}</div>
-          <div className="sc">{live.awayScore}</div>
+          <div className={`sc${flashAway ? " scored" : ""}`}>
+            <AnimatedNumber value={live.awayScore} />
+          </div>
         </div>
       </div>
 
@@ -311,7 +344,7 @@ export function LiveMatch({
             </p>
             <BoxTable box={result.home} userId={userTeamId} />
             <BoxTable box={result.away} userId={userTeamId} />
-            <button className="btn btn-primary" style={{ marginTop: 8 }} onClick={() => onComplete(result.home.points, result.away.points)}>
+            <button className="btn btn-primary" style={{ marginTop: 8 }} onClick={() => onComplete(result.home.points, result.away.points, result)}>
               Continue →
             </button>
           </div>
