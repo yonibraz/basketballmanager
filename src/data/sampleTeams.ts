@@ -28,6 +28,20 @@ const POSITION_BIAS: Record<Position, Partial<PlayerAttributes>> = {
 
 const LINEUP_ORDER: Position[] = ["PG", "SG", "SF", "PF", "C", "PG", "SG", "SF", "PF", "C", "SF", "PG"];
 
+/** Age ranges by position: [min, max]. Guards skew younger, bigs skew older. */
+const POSITION_AGE_RANGE: Record<Position, [number, number]> = {
+  PG: [20, 33],
+  SG: [20, 33],
+  SF: [21, 35],
+  PF: [21, 35],
+  C:  [22, 35],
+};
+
+function ageForPosition(rng: Rng, position: Position): number {
+  const [min, max] = POSITION_AGE_RANGE[position];
+  return rng.int(min, max);
+}
+
 function clampAttr(v: number): number {
   return Math.max(1, Math.min(20, Math.round(v)));
 }
@@ -85,7 +99,7 @@ export function makeSampleTeam(opts: SampleTeamOptions): Team {
       firstName: FIRST_NAMES[(opts.seed + i) % FIRST_NAMES.length]!,
       lastName: LAST_NAMES[(opts.seed * 3 + i) % LAST_NAMES.length]!,
       nationality,
-      age: rng.int(19, 34),
+      age: ageForPosition(rng, position),
       position,
       attributes: makeAttributes(rng, position, strength),
       homegrown,
